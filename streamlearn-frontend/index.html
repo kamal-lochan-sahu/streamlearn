@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#e50914" />
+  <meta name="description" content="Stream movies, series and courses — Netflix + Hotstar + Unacademy in one platform." />
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="StreamLearn" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="StreamLearn" />
+  <meta property="og:description" content="Stream, watch, learn — all in one platform." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/icons/icon-512.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="StreamLearn" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Razorpay -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+  <title>StreamLearn</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+  <script>
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('✅ SW registered:', reg.scope))
+          .catch(err => console.warn('SW registration failed:', err))
+      })
+    }
+  </script>
+</body>
+</html>
