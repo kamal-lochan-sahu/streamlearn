@@ -1,0 +1,21 @@
+{
+  "name": "streamlearn",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OTT + education streaming platform",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup:env": "bash scripts/setup-env.sh",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "dev:backend": "npm --prefix streamlearn-backend run dev",
+    "dev:frontend": "npm --prefix streamlearn-frontend run dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9"
+  }
+}
