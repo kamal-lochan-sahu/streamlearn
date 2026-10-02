@@ -1,8 +1,8 @@
 const LiveStream = require('../models/LiveStream');
-const LivePoll   = require('../models/LivePoll');
-const { ApiError }    = require('../utils/ApiError');
+const LivePoll = require('../models/LivePoll');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.getAll = asyncHandler(async (req, res) => {
   const { status, page = 1, limit = 20 } = req.query;
@@ -10,7 +10,8 @@ exports.getAll = asyncHandler(async (req, res) => {
   const streams = await LiveStream.find(query)
     .populate('ownerId', 'name avatar')
     .sort({ status: 1, scheduledAt: 1, createdAt: -1 })
-    .skip((page-1)*limit).limit(parseInt(limit));
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit));
   res.json(new ApiResponse(200, streams));
 });
 
@@ -31,7 +32,7 @@ exports.getHLSUrl = asyncHandler(async (req, res) => {
 exports.create = asyncHandler(async (req, res) => {
   const stream = await LiveStream.create({ ...req.body, ownerId: req.user._id });
   stream.rtmpUrl = `rtmp://localhost:1935/live/${stream.streamKey}`;
-  stream.hlsUrl  = `http://localhost:8080/live/${stream.streamKey}/index.m3u8`;
+  stream.hlsUrl = `http://localhost:8080/live/${stream.streamKey}/index.m3u8`;
   await stream.save();
   res.json(new ApiResponse(201, stream, 'Live stream created'));
 });
@@ -39,7 +40,8 @@ exports.create = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   const stream = await LiveStream.findOneAndUpdate(
     { _id: req.params.id, ownerId: req.user._id },
-    req.body, { new: true }
+    req.body,
+    { new: true }
   );
   if (!stream) throw new ApiError(404, 'Stream not found');
   res.json(new ApiResponse(200, stream, 'Updated'));
@@ -51,15 +53,19 @@ exports.remove = asyncHandler(async (req, res) => {
 });
 
 exports.startStream = asyncHandler(async (req, res) => {
-  const stream = await LiveStream.findByIdAndUpdate(req.params.id,
-    { status: 'live', startedAt: new Date() }, { new: true }
+  const stream = await LiveStream.findByIdAndUpdate(
+    req.params.id,
+    { status: 'live', startedAt: new Date() },
+    { new: true }
   );
   res.json(new ApiResponse(200, stream, 'Stream started'));
 });
 
 exports.endStream = asyncHandler(async (req, res) => {
-  const stream = await LiveStream.findByIdAndUpdate(req.params.id,
-    { status: 'ended', endedAt: new Date() }, { new: true }
+  const stream = await LiveStream.findByIdAndUpdate(
+    req.params.id,
+    { status: 'ended', endedAt: new Date() },
+    { new: true }
   );
   res.json(new ApiResponse(200, stream, 'Stream ended'));
 });
@@ -71,8 +77,8 @@ exports.createPoll = asyncHandler(async (req, res) => {
   const poll = await LivePoll.create({
     streamId: req.params.id,
     question,
-    options: options.map(text => ({ text, votes: 0 })),
-    endsAt
+    options: options.map((text) => ({ text, votes: 0 })),
+    endsAt,
   });
   const { getIO } = require('../config/socket');
   getIO()?.of('/live-stream').to(req.params.id).emit('new-poll', poll);
@@ -80,7 +86,9 @@ exports.createPoll = asyncHandler(async (req, res) => {
 });
 
 exports.getAnalytics = asyncHandler(async (req, res) => {
-  const stream = await LiveStream.findById(req.params.id).select('peakViewers totalViewers startedAt endedAt title');
+  const stream = await LiveStream.findById(req.params.id).select(
+    'peakViewers totalViewers startedAt endedAt title'
+  );
   if (!stream) throw new ApiError(404, 'Not found');
   const polls = await LivePoll.find({ streamId: req.params.id });
   res.json(new ApiResponse(200, { stream, polls }));

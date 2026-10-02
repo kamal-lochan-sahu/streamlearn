@@ -17,7 +17,11 @@ module.exports = (namespace) => {
       if (!socket.user || !message?.trim()) return;
       const update = await WatchParty.findByIdAndUpdate(
         partyId,
-        { $push: { chat: { userId: socket.user._id, name: socket.user.name, message: message.trim() } } },
+        {
+          $push: {
+            chat: { userId: socket.user._id, name: socket.user.name, message: message.trim() },
+          },
+        },
         { new: true }
       );
       namespace.to(partyId).emit('party-chat', update.chat.slice(-1)[0]);

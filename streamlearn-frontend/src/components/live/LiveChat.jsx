@@ -1,40 +1,44 @@
-import { useState, useEffect, useRef } from 'react'
-import { Send } from 'lucide-react'
-import { useLiveStore } from '../../store/liveStore'
-import { useAuthStore } from '../../store/authStore'
-import { liveChatSocket, connectLiveChat } from '../../socket/socket'
-import { formatDate } from '../../utils/formatters'
+import { useState, useEffect, useRef } from 'react';
+import { Send } from 'lucide-react';
+import { useLiveStore } from '../../store/liveStore';
+import { useAuthStore } from '../../store/authStore';
+import { liveChatSocket, connectLiveChat } from '../../socket/socket';
+import { formatDate } from '../../utils/formatters';
 
 export default function LiveChat({ streamId }) {
-  const { messages, addMessage, viewers } = useLiveStore()
-  const { user } = useAuthStore()
-  const [input, setInput] = useState('')
-  const endRef = useRef(null)
+  const { messages, addMessage, viewers } = useLiveStore();
+  const { user } = useAuthStore();
+  const [input, setInput] = useState('');
+  const endRef = useRef(null);
 
   useEffect(() => {
-    connectLiveChat()
-    liveChatSocket.emit('join-stream', { streamId })
+    connectLiveChat();
+    liveChatSocket.emit('join-stream', { streamId });
 
-    liveChatSocket.on('new-message', (msg) => addMessage(msg))
-    liveChatSocket.on('viewer-count-update', ({ count }) => useLiveStore.setState({ viewers: count }))
+    liveChatSocket.on('new-message', (msg) => addMessage(msg));
+    liveChatSocket.on('viewer-count-update', ({ count }) =>
+      useLiveStore.setState({ viewers: count })
+    );
     liveChatSocket.on('reaction', ({ emoji }) => {
       // Show floating emoji
-    })
+    });
 
     return () => {
-      liveChatSocket.emit('leave-stream', { streamId })
-      liveChatSocket.off('new-message')
-      liveChatSocket.off('viewer-count-update')
-    }
-  }, [streamId])
+      liveChatSocket.emit('leave-stream', { streamId });
+      liveChatSocket.off('new-message');
+      liveChatSocket.off('viewer-count-update');
+    };
+  }, [streamId]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const send = () => {
-    if (!input.trim()) return
-    liveChatSocket.emit('send-message', { streamId, message: input.trim() })
-    setInput('')
-  }
+    if (!input.trim()) return;
+    liveChatSocket.emit('send-message', { streamId, message: input.trim() });
+    setInput('');
+  };
 
   return (
     <div className="flex flex-col h-full bg-bg-secondary border-l border-border">
@@ -59,16 +63,18 @@ export default function LiveChat({ streamId }) {
       <div className="p-3 border-t border-border flex gap-2">
         <input
           value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && send()}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
           placeholder="Send a message..."
           className="flex-1 bg-bg-elevated border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-brand text-white placeholder:text-text-muted"
         />
-        <button onClick={send}
-          className="p-2 bg-brand rounded hover:bg-brand-dark transition-colors">
+        <button
+          onClick={send}
+          className="p-2 bg-brand rounded hover:bg-brand-dark transition-colors"
+        >
           <Send size={16} />
         </button>
       </div>
     </div>
-  )
+  );
 }

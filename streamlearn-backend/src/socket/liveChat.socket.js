@@ -1,4 +1,4 @@
-const LiveChat   = require('../models/LiveChat');
+const LiveChat = require('../models/LiveChat');
 const LiveStream = require('../models/LiveStream');
 
 module.exports = (namespace) => {
@@ -10,7 +10,7 @@ module.exports = (namespace) => {
       // Update viewer count
       await LiveStream.findByIdAndUpdate(streamId, { $inc: { totalViewers: 1 } });
       namespace.to(streamId).emit('viewer-count-update', {
-        count: (await namespace.in(streamId).fetchSockets()).length
+        count: (await namespace.in(streamId).fetchSockets()).length,
       });
     });
 
@@ -21,7 +21,10 @@ module.exports = (namespace) => {
     socket.on('send-message', async ({ streamId, message, type = 'text' }) => {
       if (!socket.user || !message?.trim()) return;
       const chat = await LiveChat.create({
-        streamId, userId: socket.user._id, message: message.trim(), type
+        streamId,
+        userId: socket.user._id,
+        message: message.trim(),
+        type,
       });
       await chat.populate('userId', 'name avatar');
       namespace.to(streamId).emit('new-message', chat);

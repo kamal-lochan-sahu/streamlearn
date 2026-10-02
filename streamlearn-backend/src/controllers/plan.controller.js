@@ -1,7 +1,7 @@
-const Plan  = require('../models/Plan');
-const { ApiError }    = require('../utils/ApiError');
+const Plan = require('../models/Plan');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.getAll = asyncHandler(async (req, res) => {
   const plans = await Plan.find({ isActive: true }).sort('sortOrder price.monthly');

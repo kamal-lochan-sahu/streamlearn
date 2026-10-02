@@ -1,7 +1,7 @@
 const Coupon = require('../models/Coupon');
-const { ApiError }    = require('../utils/ApiError');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.validate = asyncHandler(async (req, res) => {
   const { code, planId, amount } = req.body;
@@ -9,24 +9,34 @@ exports.validate = asyncHandler(async (req, res) => {
   const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
   if (!coupon) throw new ApiError(404, 'Invalid coupon code');
   if (coupon.endDate && new Date() > coupon.endDate) throw new ApiError(400, 'Coupon expired');
-  if (coupon.startDate && new Date() < coupon.startDate) throw new ApiError(400, 'Coupon not active yet');
-  if (coupon.usageLimit > 0 && coupon.usageCount >= coupon.usageLimit) throw new ApiError(400, 'Coupon usage limit reached');
+  if (coupon.startDate && new Date() < coupon.startDate)
+    throw new ApiError(400, 'Coupon not active yet');
+  if (coupon.usageLimit > 0 && coupon.usageCount >= coupon.usageLimit)
+    throw new ApiError(400, 'Coupon usage limit reached');
 
-  const userUsage = coupon.usedBy.filter(u => u.userId.toString() === req.user._id.toString()).length;
-  if (userUsage >= coupon.perUserLimit) throw new ApiError(400, 'Coupon already used maximum times');
+  const userUsage = coupon.usedBy.filter(
+    (u) => u.userId.toString() === req.user._id.toString()
+  ).length;
+  if (userUsage >= coupon.perUserLimit)
+    throw new ApiError(400, 'Coupon already used maximum times');
 
   let discount = 0;
   if (amount) {
     if (coupon.type === 'percent') discount = amount * (coupon.value / 100);
-    if (coupon.type === 'fixed')   discount = coupon.value;
+    if (coupon.type === 'fixed') discount = coupon.value;
     if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
   }
 
-  res.json(new ApiResponse(200, {
-    valid: true, code: coupon.code, type: coupon.type,
-    value: coupon.value, discount: Math.round(discount * 100) / 100,
-    description: coupon.description
-  }));
+  res.json(
+    new ApiResponse(200, {
+      valid: true,
+      code: coupon.code,
+      type: coupon.type,
+      value: coupon.value,
+      discount: Math.round(discount * 100) / 100,
+      description: coupon.description,
+    })
+  );
 });
 
 exports.getAll = asyncHandler(async (req, res) => {

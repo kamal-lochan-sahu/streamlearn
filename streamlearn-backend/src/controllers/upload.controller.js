@@ -1,34 +1,41 @@
 const cloudinary = require('../config/cloudinary');
 const { transcodingQueue } = require('../queue/jobQueue');
-const Content  = require('../models/Content');
-const Episode  = require('../models/Episode');
-const Lecture  = require('../models/Lecture');
-const { ApiError }    = require('../utils/ApiError');
+const Content = require('../models/Content');
+const Episode = require('../models/Episode');
+const Lecture = require('../models/Lecture');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 const multer = require('multer');
-const path   = require('path');
-const fs     = require('fs');
+const path = require('path');
+const fs = require('fs');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const d = './uploads/temp'; fs.mkdirSync(d, { recursive: true }); cb(null, d);
+    const d = './uploads/temp';
+    fs.mkdirSync(d, { recursive: true });
+    cb(null, d);
   },
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g,'_')}`)
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`),
 });
 
 exports.videoUploadMiddleware = multer({
-  storage, limits: { fileSize: 10 * 1024 * 1024 * 1024 }  // 10GB
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // 10GB
 }).single('video');
 
 exports.imageUploadMiddleware = multer({
-  storage, limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Images only'))
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) =>
+    file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Images only')),
 }).single('image');
 
 exports.pdfUploadMiddleware = multer({
-  storage, limits: { fileSize: 100 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => file.mimetype === 'application/pdf' ? cb(null, true) : cb(new Error('PDF only'))
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) =>
+    file.mimetype === 'application/pdf' ? cb(null, true) : cb(new Error('PDF only')),
 }).single('pdf');
 
 // POST /api/upload/video
@@ -62,7 +69,9 @@ exports.uploadImage = asyncHandler(async (req, res) => {
 exports.uploadPDF = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'PDF required');
   const result = await cloudinary.uploader.upload(req.file.path, {
-    folder: 'notes', resource_type: 'raw', format: 'pdf'
+    folder: 'notes',
+    resource_type: 'raw',
+    format: 'pdf',
   });
   fs.unlinkSync(req.file.path);
   res.json(new ApiResponse(200, { url: result.secure_url }));
@@ -72,7 +81,7 @@ exports.uploadPDF = asyncHandler(async (req, res) => {
 exports.getTranscodeStatus = asyncHandler(async (req, res) => {
   const job = await transcodingQueue.getJob(req.params.jobId);
   if (!job) throw new ApiError(404, 'Job not found');
-  const state    = await job.getState();
+  const state = await job.getState();
   const progress = job._progress;
   res.json(new ApiResponse(200, { jobId: job.id, state, progress }));
 });

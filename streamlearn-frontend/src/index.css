@@ -11,14 +11,24 @@
 }
 
 /* ── Reset ── */
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+}
 
 body {
   background-color: var(--bg-primary);
   color: #ffffff;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
@@ -30,7 +40,9 @@ body {
 
 /* On mobile, add bottom padding for the bottom nav */
 @media (max-width: 767px) {
-  body { padding-bottom: calc(65px + var(--safe-area-bottom)); }
+  body {
+    padding-bottom: calc(65px + var(--safe-area-bottom));
+  }
 }
 
 /* Safe area for PWA */
@@ -39,10 +51,20 @@ body {
 }
 
 /* ── Scrollbar ── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #404040; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
 
 /* ── Content rows (no scrollbar visible) ── */
 .content-row {
@@ -50,60 +72,140 @@ body {
   -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
 }
-.content-row::-webkit-scrollbar { display: none; }
+.content-row::-webkit-scrollbar {
+  display: none;
+}
 
 /* ── Netflix hero gradient ── */
 .hero-gradient {
   background:
-    linear-gradient(to right, rgba(20,20,20,0.95) 25%, transparent 65%),
-    linear-gradient(to top, rgba(20,20,20,1) 0%, transparent 40%);
+    linear-gradient(to right, rgba(20, 20, 20, 0.95) 25%, transparent 65%),
+    linear-gradient(to top, rgba(20, 20, 20, 1) 0%, transparent 40%);
 }
 
 @media (max-width: 640px) {
   .hero-gradient {
-    background: linear-gradient(to top, rgba(20,20,20,1) 0%, rgba(20,20,20,0.6) 50%, transparent 100%);
+    background: linear-gradient(
+      to top,
+      rgba(20, 20, 20, 1) 0%,
+      rgba(20, 20, 20, 0.6) 50%,
+      transparent 100%
+    );
   }
 }
 
 /* ── Video.js overrides ── */
-.video-js { background: #000 !important; width: 100% !important; }
-.video-js .vjs-big-play-button { display: none !important; }
+.video-js {
+  background: #000 !important;
+  width: 100% !important;
+}
+.video-js .vjs-big-play-button {
+  display: none !important;
+}
 .vjs-control-bar {
-  background: linear-gradient(transparent, rgba(0,0,0,0.85)) !important;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85)) !important;
   height: 4rem !important;
   padding: 0 1rem !important;
 }
 
 /* ── Touch optimizations ── */
-button, a, [role="button"] {
+button,
+a,
+[role='button'] {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
 /* ── Card hover (desktop only) ── */
 @media (pointer: fine) {
-  .group:hover .group-hover\:scale-105 { transform: scale(1.05); }
+  .group:hover .group-hover\:scale-105 {
+    transform: scale(1.05);
+  }
 }
 
 /* ── Mobile-specific utility ── */
-.line-clamp-1 { -webkit-line-clamp: 1; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
-.line-clamp-2 { -webkit-line-clamp: 2; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
-.line-clamp-3 { -webkit-line-clamp: 3; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
+.line-clamp-1 {
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+.line-clamp-2 {
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+.line-clamp-3 {
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
 
 /* ── PWA install prompt ── */
 .pwa-install-prompt {
-  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-  background: #1f1f1f; border: 1px solid #333; border-radius: 12px;
-  padding: 12px 20px; display: flex; align-items: center; gap: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 100; white-space: nowrap;
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f1f1f;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  white-space: nowrap;
 }
 
 /* ── Animations ── */
-@keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
-@keyframes slideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }
-@keyframes slideIn { from { opacity: 0; transform: translateX(-16px) } to { opacity: 1; transform: translateX(0) } }
-@keyframes pulse   { 0%,100% { opacity: 1 } 50% { opacity: .5 } }
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
 
-.animate-fade-in  { animation: fadeIn 0.25s ease-out; }
-.animate-slide-up { animation: slideUp 0.3s ease-out; }
-.animate-slide-in { animation: slideIn 0.3s ease-out; }
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}

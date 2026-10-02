@@ -3,10 +3,12 @@
 Last updated: 2026-10-02
 
 ## Goal
+
 Production-grade OTT + education platform (Node/Express, MongoDB, Redis, Bull, FFmpeg, React/Vite).
 Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deployed yet.
 
 ## Phases
+
 - [ ] Phase 0: cleanup, tooling (lint, CI, Docker, tests setup)
 - [ ] Phase 1: security and payments (P0 list below)
 - [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
@@ -16,6 +18,7 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - [ ] Phase 6: competitor-driven features
 
 ## Open P0 issues (from initial audit)
+
 1. POST /subscriptions/subscribe activates a plan without payment
 2. Coupon routes have no admin check; /coupons/validate route missing
 3. Stream endpoints ignore access/subscription; signed URL never validated; /uploads is public
@@ -29,4 +32,5 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 11. NoSQL and regex injection via query params
 
 ## Decisions
+
 (none yet)

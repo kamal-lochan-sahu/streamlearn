@@ -1,17 +1,17 @@
-const Content   = require('../models/Content');
-const Episode   = require('../models/Episode');
-const Section   = require('../models/Section');
-const Lecture   = require('../models/Lecture');
-const { ApiError }    = require('../utils/ApiError');
+const Content = require('../models/Content');
+const Episode = require('../models/Episode');
+const Section = require('../models/Section');
+const Lecture = require('../models/Lecture');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 const { generateSignedUrl } = require('../utils/hls.utils');
 const { get: cGet, set: cSet, del: cDel } = require('../services/cache.service');
 const { transcodingQueue } = require('../queue/jobQueue');
 const cloudinary = require('../config/cloudinary');
-const multer  = require('multer');
-const path    = require('path');
-const fs      = require('fs');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const slugify = require('slugify');
 
 // ── Multer setup ──────────────────────────────────────
@@ -21,7 +21,7 @@ const storage = multer.diskStorage({
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`)
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`),
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
 exports.uploadMiddleware = upload.single('video');
@@ -37,13 +37,22 @@ const makeSlug = async (title, id = null) => {
 
 // ── GET /api/content  (browse + filters) ─────────────
 exports.getAll = asyncHandler(async (req, res) => {
-  const { type, genre, language, year, access, page = 1, limit = 20, sort = '-createdAt' } = req.query;
+  const {
+    type,
+    genre,
+    language,
+    year,
+    access,
+    page = 1,
+    limit = 20,
+    sort = '-createdAt',
+  } = req.query;
   const query = { isActive: true };
-  if (type)     query.type = type;
-  if (genre)    query.genre = { $in: Array.isArray(genre) ? genre : [genre] };
+  if (type) query.type = type;
+  if (genre) query.genre = { $in: Array.isArray(genre) ? genre : [genre] };
   if (language) query.language = { $in: Array.isArray(language) ? language : [language] };
-  if (year)     query.releaseYear = parseInt(year);
-  if (access)   query.access = access;
+  if (year) query.releaseYear = parseInt(year);
+  if (access) query.access = access;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const cacheKey = `content:browse:${JSON.stringify(req.query)}`;
@@ -51,9 +60,14 @@ exports.getAll = asyncHandler(async (req, res) => {
   if (cached) return res.json(new ApiResponse(200, cached));
 
   const [items, total] = await Promise.all([
-    Content.find(query).sort(sort).skip(skip).limit(parseInt(limit))
-      .select('title slug thumbnail banner type genre language releaseYear duration rating viewCount access isFeatured'),
-    Content.countDocuments(query)
+    Content.find(query)
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .select(
+        'title slug thumbnail banner type genre language releaseYear duration rating viewCount access isFeatured'
+      ),
+    Content.countDocuments(query),
   ]);
   const data = { items, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) };
   await cSet(cacheKey, data, 300);
@@ -65,8 +79,11 @@ exports.getFeatured = asyncHandler(async (req, res) => {
   const cached = await cGet('content:featured');
   if (cached) return res.json(new ApiResponse(200, cached));
   const items = await Content.find({ isActive: true, isFeatured: true })
-    .sort('-createdAt').limit(10)
-    .select('title slug thumbnail banner shortDesc description type genre releaseYear rating ageRating');
+    .sort('-createdAt')
+    .limit(10)
+    .select(
+      'title slug thumbnail banner shortDesc description type genre releaseYear rating ageRating'
+    );
   await cSet('content:featured', items, 600);
   res.json(new ApiResponse(200, items));
 });
@@ -76,7 +93,8 @@ exports.getTrending = asyncHandler(async (req, res) => {
   const cached = await cGet('content:trending');
   if (cached) return res.json(new ApiResponse(200, cached));
   const items = await Content.find({ isActive: true })
-    .sort('-viewCount -rating.average').limit(20)
+    .sort('-viewCount -rating.average')
+    .limit(20)
     .select('title slug thumbnail type genre releaseYear duration rating viewCount');
   await cSet('content:trending', items, 300);
   res.json(new ApiResponse(200, items));
@@ -85,7 +103,8 @@ exports.getTrending = asyncHandler(async (req, res) => {
 // ── GET /api/content/new-releases ────────────────────
 exports.getNewReleases = asyncHandler(async (req, res) => {
   const items = await Content.find({ isActive: true })
-    .sort('-createdAt').limit(20)
+    .sort('-createdAt')
+    .limit(20)
     .select('title slug thumbnail type genre releaseYear duration rating');
   res.json(new ApiResponse(200, items));
 });
@@ -98,8 +117,9 @@ exports.getContinueWatching = asyncHandler(async (req, res) => {
 
   const populated = await Promise.all(
     profile.continueWatching.slice(0, 20).map(async (cw) => {
-      const content = await Content.findById(cw.contentId)
-        .select('title slug thumbnail type duration');
+      const content = await Content.findById(cw.contentId).select(
+        'title slug thumbnail type duration'
+      );
       if (!content) return null;
       return { ...content.toObject(), timestamp: cw.timestamp, updatedAt: cw.updatedAt };
     })
@@ -121,8 +141,10 @@ exports.getBySlug = asyncHandler(async (req, res) => {
   const cached = await cGet(cacheKey);
   if (cached) return res.json(new ApiResponse(200, cached));
 
-  const content = await Content.findOne({ slug, isActive: true })
-    .populate('instructor', 'name avatar');
+  const content = await Content.findOne({ slug, isActive: true }).populate(
+    'instructor',
+    'name avatar'
+  );
   if (!content) throw new ApiError(404, 'Content not found');
 
   // Increment view count
@@ -131,11 +153,13 @@ exports.getBySlug = asyncHandler(async (req, res) => {
   let extra = {};
   if (content.type === 'series') {
     extra.episodes = await Episode.find({ contentId: content._id, isActive: true })
-      .sort('seasonNumber episodeNumber').select('-videoFiles');
+      .sort('seasonNumber episodeNumber')
+      .select('-videoFiles');
   }
   if (content.type === 'course') {
     extra.sections = await Section.find({ contentId: content._id })
-      .sort('order').populate({ path: 'lectures', select: '-videoFiles', options: { sort: { order: 1 } } });
+      .sort('order')
+      .populate({ path: 'lectures', select: '-videoFiles', options: { sort: { order: 1 } } });
   }
 
   const data = { ...content.toObject(), ...extra };
@@ -153,7 +177,7 @@ exports.getStreamUrl = asyncHandler(async (req, res) => {
   const videoFiles = content.videoFiles;
   if (!videoFiles?.master) throw new ApiError(404, 'Video not ready yet');
 
-  const url = quality === 'master' ? videoFiles.master : (videoFiles[quality] || videoFiles.master);
+  const url = quality === 'master' ? videoFiles.master : videoFiles[quality] || videoFiles.master;
   const signedUrl = generateSignedUrl(url);
   res.json(new ApiResponse(200, { url: signedUrl, quality }));
 });
@@ -165,8 +189,10 @@ exports.getRelated = asyncHandler(async (req, res) => {
   const items = await Content.find({
     isActive: true,
     _id: { $ne: content._id },
-    $or: [{ type: content.type }, { genre: { $in: content.genre } }]
-  }).limit(12).select('title slug thumbnail type genre duration rating');
+    $or: [{ type: content.type }, { genre: { $in: content.genre } }],
+  })
+    .limit(12)
+    .select('title slug thumbnail type genre duration rating');
   res.json(new ApiResponse(200, items));
 });
 
@@ -183,22 +209,49 @@ exports.getEpisodes = asyncHandler(async (req, res) => {
   const content = await Content.findOne({ slug: req.params.slug });
   if (!content) throw new ApiError(404, 'Content not found');
   const episodes = await Episode.find({ contentId: content._id, isActive: true })
-    .sort('seasonNumber episodeNumber').select('-videoFiles');
+    .sort('seasonNumber episodeNumber')
+    .select('-videoFiles');
   res.json(new ApiResponse(200, episodes));
 });
 
 // ── ADMIN: POST /api/content/admin/create ────────────
 exports.create = asyncHandler(async (req, res) => {
-  const { title, type, description, shortDesc, genre, language, releaseYear,
-          duration, ageRating, access, price, skillLevel, whatYouLearn, tags } = req.body;
+  const {
+    title,
+    type,
+    description,
+    shortDesc,
+    genre,
+    language,
+    releaseYear,
+    duration,
+    ageRating,
+    access,
+    price,
+    skillLevel,
+    whatYouLearn,
+    tags,
+  } = req.body;
   if (!title || !type) throw new ApiError(400, 'Title and type required');
   const slug = await makeSlug(title);
   const content = await Content.create({
-    ownerId: req.user._id, title, slug, type, description, shortDesc,
-    genre: genre || [], language: language || [], releaseYear, duration,
-    ageRating, access: access || 'subscribers', price: price || 0,
-    skillLevel, whatYouLearn: whatYouLearn || [], tags: tags || [],
-    instructor: req.user._id
+    ownerId: req.user._id,
+    title,
+    slug,
+    type,
+    description,
+    shortDesc,
+    genre: genre || [],
+    language: language || [],
+    releaseYear,
+    duration,
+    ageRating,
+    access: access || 'subscribers',
+    price: price || 0,
+    skillLevel,
+    whatYouLearn: whatYouLearn || [],
+    tags: tags || [],
+    instructor: req.user._id,
   });
   res.json(new ApiResponse(201, content, 'Content created'));
 });
@@ -236,7 +289,7 @@ exports.uploadVideo = asyncHandler(async (req, res) => {
     outputDir,
     contentId: id,
     model: 'content',
-    type: content.type
+    type: content.type,
   });
 
   res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding started' }));
@@ -247,8 +300,11 @@ exports.uploadThumbnail = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'Image required');
   const result = await cloudinary.uploader.upload(req.file.path, { folder: 'thumbnails' });
   fs.unlinkSync(req.file.path);
-  const content = await Content.findByIdAndUpdate(req.params.id,
-    { thumbnail: result.secure_url }, { new: true });
+  const content = await Content.findByIdAndUpdate(
+    req.params.id,
+    { thumbnail: result.secure_url },
+    { new: true }
+  );
   res.json(new ApiResponse(200, { thumbnail: result.secure_url }));
 });
 
@@ -266,20 +322,24 @@ exports.toggle = asyncHandler(async (req, res) => {
 exports.getAnalytics = asyncHandler(async (req, res) => {
   const content = await Content.findById(req.params.id).select('viewCount rating title');
   if (!content) throw new ApiError(404, 'Content not found');
-  res.json(new ApiResponse(200, {
-    viewCount: content.viewCount,
-    rating: content.rating,
-    title: content.title
-  }));
+  res.json(
+    new ApiResponse(200, {
+      viewCount: content.viewCount,
+      rating: content.rating,
+      title: content.title,
+    })
+  );
 });
 
 // ── Transcode status polling ───────────────────────────
 exports.getTranscodeStatus = asyncHandler(async (req, res) => {
   const content = await Content.findById(req.params.id).select('transcodeStatus videoFiles');
   if (!content) throw new ApiError(404, 'Not found');
-  res.json(new ApiResponse(200, {
-    status: content.transcodeStatus,
-    ready: content.transcodeStatus === 'done',
-    videoFiles: content.transcodeStatus === 'done' ? content.videoFiles : null
-  }));
+  res.json(
+    new ApiResponse(200, {
+      status: content.transcodeStatus,
+      ready: content.transcodeStatus === 'done',
+      videoFiles: content.transcodeStatus === 'done' ? content.videoFiles : null,
+    })
+  );
 });

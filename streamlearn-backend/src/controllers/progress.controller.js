@@ -1,16 +1,20 @@
 const CourseProgress = require('../models/CourseProgress');
-const Content        = require('../models/Content');
-const Section        = require('../models/Section');
+const Content = require('../models/Content');
+const Section = require('../models/Section');
 const { generateCertificate } = require('../utils/certificate.utils');
-const { ApiError }    = require('../utils/ApiError');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.getProgress = asyncHandler(async (req, res) => {
   const { contentId } = req.params;
   let progress = await CourseProgress.findOne({ userId: req.user._id, contentId });
   if (!progress) {
-    progress = await CourseProgress.create({ userId: req.user._id, contentId, enrolledAt: new Date() });
+    progress = await CourseProgress.create({
+      userId: req.user._id,
+      contentId,
+      enrolledAt: new Date(),
+    });
   }
   res.json(new ApiResponse(200, progress));
 });
@@ -32,7 +36,9 @@ exports.markLectureComplete = asyncHandler(async (req, res) => {
   const sections = await Section.find({ contentId }).populate('lectures', '_id');
   const totalLectures = sections.reduce((sum, s) => sum + s.lectures.length, 0);
   if (totalLectures > 0) {
-    progress.completionPercent = Math.round((progress.completedLectures.length / totalLectures) * 100);
+    progress.completionPercent = Math.round(
+      (progress.completedLectures.length / totalLectures) * 100
+    );
   }
   if (progress.completionPercent >= 100 && !progress.completedAt) {
     progress.completedAt = new Date();
@@ -55,7 +61,8 @@ exports.saveTimestamp = asyncHandler(async (req, res) => {
 exports.getCertificate = asyncHandler(async (req, res) => {
   const { contentId } = req.params;
   const progress = await CourseProgress.findOne({ userId: req.user._id, contentId });
-  if (!progress || progress.completionPercent < 100) throw new ApiError(400, 'Course not completed');
+  if (!progress || progress.completionPercent < 100)
+    throw new ApiError(400, 'Course not completed');
   if (!progress.certificateIssued) throw new ApiError(404, 'Certificate not generated yet');
   res.json(new ApiResponse(200, { certificateUrl: progress.certificateUrl }));
 });
@@ -66,21 +73,23 @@ exports.generateCertificate = asyncHandler(async (req, res) => {
 
   const [progress, content] = await Promise.all([
     CourseProgress.findOne({ userId: req.user._id, contentId }),
-    Content.findById(contentId).populate('instructor', 'name')
+    Content.findById(contentId).populate('instructor', 'name'),
   ]);
 
-  if (!progress || progress.completionPercent < 100) throw new ApiError(400, 'Complete the course first');
-  if (progress.certificateIssued) return res.json(new ApiResponse(200, { certificateUrl: progress.certificateUrl }));
+  if (!progress || progress.completionPercent < 100)
+    throw new ApiError(400, 'Complete the course first');
+  if (progress.certificateIssued)
+    return res.json(new ApiResponse(200, { certificateUrl: progress.certificateUrl }));
 
   const certUrl = await generateCertificate({
-    studentName:    req.user.name,
-    courseName:     content.title,
+    studentName: req.user.name,
+    courseName: content.title,
     completionDate: progress.completedAt?.toLocaleDateString('en-IN'),
-    instructorName: content.instructor?.name || 'StreamLearn'
+    instructorName: content.instructor?.name || 'StreamLearn',
   });
 
   progress.certificateIssued = true;
-  progress.certificateUrl    = certUrl;
+  progress.certificateUrl = certUrl;
   await progress.save();
 
   res.json(new ApiResponse(200, { certificateUrl: certUrl }, 'Certificate generated'));

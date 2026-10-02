@@ -1,5 +1,5 @@
-const path      = require('path');
-const crypto    = require('crypto');
+const path = require('path');
+const crypto = require('crypto');
 const { ApiError } = require('./ApiError');
 
 const generateSignedUrl = (url, expiresInSeconds = 14400) => {

@@ -1,6 +1,7 @@
 # StreamLearn — Deployment Guide
 
 ## 🖥️ Architecture
+
 ```
 Frontend  → Vercel    (free)
 Backend   → Render    (free)
@@ -15,6 +16,7 @@ Video CDN → Cloudinary (demo) / Bunny.net (production)
 ## 1️⃣ Backend → Render
 
 ### Step 1: Push to GitHub
+
 ```bash
 cd streamlearn-backend
 git init
@@ -25,6 +27,7 @@ git push -u origin main
 ```
 
 ### Step 2: Deploy on Render
+
 1. Go to https://render.com → New → Web Service
 2. Connect GitHub repo: `streamlearn-backend`
 3. Settings:
@@ -36,9 +39,11 @@ git push -u origin main
 5. Click Deploy
 
 ### Step 3: Get your backend URL
+
 ```
 https://streamlearn-backend-xxxx.onrender.com
 ```
+
 Note this URL — you'll need it for frontend.
 
 ---
@@ -46,12 +51,14 @@ Note this URL — you'll need it for frontend.
 ## 2️⃣ Frontend → Vercel
 
 ### Step 1: Update .env.production
+
 ```
 VITE_API_URL=https://streamlearn-backend-xxxx.onrender.com/api
 VITE_SOCKET_URL=https://streamlearn-backend-xxxx.onrender.com
 ```
 
 ### Step 2: Push to GitHub
+
 ```bash
 cd streamlearn-frontend
 git init
@@ -62,6 +69,7 @@ git push -u origin main
 ```
 
 ### Step 3: Deploy on Vercel
+
 ```bash
 # Option A: Vercel CLI (recommended)
 npm install -g vercel
@@ -73,6 +81,7 @@ vercel
 ```
 
 ### Step 4: Set environment variables in Vercel
+
 ```
 VITE_API_URL = https://your-backend.onrender.com/api
 VITE_SOCKET_URL = https://your-backend.onrender.com
@@ -84,6 +93,7 @@ VITE_RAZORPAY_KEY = rzp_test_xxxxxxxxxx
 ## 3️⃣ Update CORS on Backend
 
 In your Render env vars, update:
+
 ```
 CLIENT_URL=https://your-app.vercel.app
 ```
@@ -96,13 +106,14 @@ CLIENT_URL=https://your-app.vercel.app
 **Render**: Add custom domain in Render settings
 
 Example: `app.clientname.com` → Vercel
-         `api.clientname.com` → Render
+`api.clientname.com` → Render
 
 ---
 
 ## 5️⃣ White Label Delivery
 
 For each new client:
+
 1. Fork both repos OR use same code with client's env vars
 2. Change in .env:
    ```

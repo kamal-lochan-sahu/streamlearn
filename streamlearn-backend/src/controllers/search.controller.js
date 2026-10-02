@@ -1,10 +1,18 @@
 const { search, getSuggestions } = require('../services/search.service');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.search = asyncHandler(async (req, res) => {
   const { q, type, genre, language, year, page = 1, limit = 20 } = req.query;
-  const result = await search({ q, type, genre, language, year, page: parseInt(page), limit: parseInt(limit) });
+  const result = await search({
+    q,
+    type,
+    genre,
+    language,
+    year,
+    page: parseInt(page),
+    limit: parseInt(limit),
+  });
   res.json(new ApiResponse(200, result));
 });
 

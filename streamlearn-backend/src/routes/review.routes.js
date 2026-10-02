@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const ctrl   = require('../controllers/review.controller');
+const ctrl = require('../controllers/review.controller');
 const { authenticate, optionalAuth } = require('../middleware/auth.middleware');
 
 router.post('/', authenticate, ctrl.create);

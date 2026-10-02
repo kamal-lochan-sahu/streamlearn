@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const ctrl   = require('../controllers/progress.controller');
+const ctrl = require('../controllers/progress.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 
 router.use(authenticate);

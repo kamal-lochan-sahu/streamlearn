@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create } from 'zustand';
 
 export const useUIStore = create((set) => ({
   sidebarOpen: false,
@@ -7,8 +7,8 @@ export const useUIStore = create((set) => ({
   theme: 'dark',
   navTransparent: true,
 
-  toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
+  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   openModal: (content) => set({ modalOpen: true, modalContent: content }),
   closeModal: () => set({ modalOpen: false, modalContent: null }),
   setNavTransparent: (val) => set({ navTransparent: val }),
-}))
+}));

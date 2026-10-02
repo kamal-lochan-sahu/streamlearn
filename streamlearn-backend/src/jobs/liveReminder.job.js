@@ -1,4 +1,4 @@
-const cron       = require('node-cron');
+const cron = require('node-cron');
 const LiveStream = require('../models/LiveStream');
 const { createNotification } = require('../services/notification.service');
 

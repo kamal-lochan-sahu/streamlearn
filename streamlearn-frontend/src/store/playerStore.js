@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create } from 'zustand';
 
 export const usePlayerStore = create((set, get) => ({
   currentContent: null,
@@ -14,14 +14,22 @@ export const usePlayerStore = create((set, get) => ({
   timestamp: 0,
   duration: 0,
 
-  setContent: (content, episode, lecture) => set({ currentContent: content, currentEpisode: episode, currentLecture: lecture }),
+  setContent: (content, episode, lecture) =>
+    set({ currentContent: content, currentEpisode: episode, currentLecture: lecture }),
   setPlaying: (isPlaying) => set({ isPlaying }),
   setVolume: (volume) => set({ volume, muted: volume === 0 }),
-  toggleMute: () => set(s => ({ muted: !s.muted })),
+  toggleMute: () => set((s) => ({ muted: !s.muted })),
   setQuality: (quality) => set({ quality }),
   setSpeed: (speed) => set({ speed }),
-  toggleNotes: () => set(s => ({ showNotes: !s.showNotes })),
+  toggleNotes: () => set((s) => ({ showNotes: !s.showNotes })),
   setTimestamp: (timestamp) => set({ timestamp }),
   setDuration: (duration) => set({ duration }),
-  reset: () => set({ currentContent: null, currentEpisode: null, currentLecture: null, isPlaying: false, timestamp: 0 }),
-}))
+  reset: () =>
+    set({
+      currentContent: null,
+      currentEpisode: null,
+      currentLecture: null,
+      isPlaying: false,
+      timestamp: 0,
+    }),
+}));

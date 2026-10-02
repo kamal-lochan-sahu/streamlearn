@@ -1,7 +1,7 @@
-const User        = require('../models/User');
-const Content     = require('../models/Content');
+const User = require('../models/User');
+const Content = require('../models/Content');
 const Transaction = require('../models/Transaction');
-const Subscription= require('../models/Subscription');
+const Subscription = require('../models/Subscription');
 
 const getDashboardStats = async () => {
   const [totalUsers, activeSubscriptions, totalContent, revenue] = await Promise.all([

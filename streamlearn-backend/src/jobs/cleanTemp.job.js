@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
 
 // Run every midnight
@@ -9,9 +9,9 @@ cron.schedule('0 0 * * *', () => {
 
   const files = fs.readdirSync(tempDir);
   let cleaned = 0;
-  files.forEach(file => {
+  files.forEach((file) => {
     if (file === '.gitkeep') return;
-    const fp    = path.join(tempDir, file);
+    const fp = path.join(tempDir, file);
     const stats = fs.statSync(fp);
     const ageHours = (Date.now() - stats.mtimeMs) / 3600000;
     if (ageHours > 24) {

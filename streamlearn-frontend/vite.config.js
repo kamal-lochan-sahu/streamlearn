@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
@@ -31,18 +31,18 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor:    ['react', 'react-dom', 'react-router-dom'],
-          query:     ['@tanstack/react-query'],
-          player:    ['hls.js'],
-          charts:    ['recharts'],
-          ui:        ['lucide-react'],
-          socket:    ['socket.io-client'],
-        }
-      }
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          query: ['@tanstack/react-query'],
+          player: ['hls.js'],
+          charts: ['recharts'],
+          ui: ['lucide-react'],
+          socket: ['socket.io-client'],
+        },
+      },
     },
     chunkSizeWarningLimit: 1000,
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query']
-  }
-})
+    include: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
+  },
+});

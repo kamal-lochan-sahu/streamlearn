@@ -1,7 +1,7 @@
 require('dotenv').config();
-const http    = require('http');
-const app     = require('./app');
-const { connectDB }  = require('./config/db');
+const http = require('http');
+const app = require('./app');
+const { connectDB } = require('./config/db');
 const { connectRedis } = require('./config/redis');
 const { initSocket } = require('./config/socket');
 
@@ -26,7 +26,7 @@ async function start() {
   });
 }
 
-start().catch(err => {
+start().catch((err) => {
   console.error('❌ Startup failed:', err);
   process.exit(1);
 });

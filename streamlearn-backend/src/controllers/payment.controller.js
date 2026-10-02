@@ -1,12 +1,12 @@
-const crypto      = require('crypto');
-const Razorpay    = require('../config/razorpay');
-const Stripe      = require('../config/stripe');
+const crypto = require('crypto');
+const Razorpay = require('../config/razorpay');
+const Stripe = require('../config/stripe');
 const Transaction = require('../models/Transaction');
-const Plan        = require('../models/Plan');
-const Content     = require('../models/Content');
-const { ApiError }    = require('../utils/ApiError');
+const Plan = require('../models/Plan');
+const Content = require('../models/Content');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 // ── Razorpay: create order ────────────────────────────
 exports.createRazorpayOrder = asyncHandler(async (req, res) => {
@@ -24,30 +24,37 @@ exports.createRazorpayOrder = asyncHandler(async (req, res) => {
     const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
     if (coupon && new Date() <= coupon.endDate) {
       if (coupon.type === 'percent') amount = amount * (1 - coupon.value / 100);
-      if (coupon.type === 'fixed')   amount = Math.max(0, amount - coupon.value);
+      if (coupon.type === 'fixed') amount = Math.max(0, amount - coupon.value);
     }
   }
 
   const order = await Razorpay.orders.create({
-    amount: Math.round(amount * 100),  // paise
+    amount: Math.round(amount * 100), // paise
     currency: 'INR',
     receipt: `rcpt_${Date.now()}`,
-    notes: { planId, billingCycle, userId: req.user._id.toString() }
+    notes: { planId, billingCycle, userId: req.user._id.toString() },
   });
 
   // Create pending transaction
   await Transaction.create({
-    userId: req.user._id, type: 'subscription', planId,
-    gateway: 'razorpay', gatewayOrderId: order.id,
-    amount, currency: 'INR', status: 'pending'
+    userId: req.user._id,
+    type: 'subscription',
+    planId,
+    gateway: 'razorpay',
+    gatewayOrderId: order.id,
+    amount,
+    currency: 'INR',
+    status: 'pending',
   });
 
-  res.json(new ApiResponse(200, {
-    orderId: order.id,
-    amount: order.amount,
-    currency: order.currency,
-    keyId: process.env.RAZORPAY_KEY_ID
-  }));
+  res.json(
+    new ApiResponse(200, {
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID,
+    })
+  );
 });
 
 // ── Razorpay: verify payment ──────────────────────────
@@ -59,7 +66,8 @@ exports.verifyRazorpay = asyncHandler(async (req, res) => {
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
     .digest('hex');
 
-  if (expectedSignature !== razorpay_signature) throw new ApiError(400, 'Invalid payment signature');
+  if (expectedSignature !== razorpay_signature)
+    throw new ApiError(400, 'Invalid payment signature');
 
   const txn = await Transaction.findOneAndUpdate(
     { gatewayOrderId: razorpay_order_id },
@@ -104,13 +112,18 @@ exports.createStripeIntent = asyncHandler(async (req, res) => {
   const intent = await Stripe.paymentIntents.create({
     amount: Math.round(amount * 100),
     currency: 'usd',
-    metadata: { planId, billingCycle, userId: req.user._id.toString() }
+    metadata: { planId, billingCycle, userId: req.user._id.toString() },
   });
 
   await Transaction.create({
-    userId: req.user._id, type: 'subscription', planId,
-    gateway: 'stripe', gatewayOrderId: intent.id,
-    amount, currency: 'USD', status: 'pending'
+    userId: req.user._id,
+    type: 'subscription',
+    planId,
+    gateway: 'stripe',
+    gatewayOrderId: intent.id,
+    amount,
+    currency: 'USD',
+    status: 'pending',
   });
 
   res.json(new ApiResponse(200, { clientSecret: intent.client_secret }));
@@ -144,24 +157,38 @@ exports.buyPPV = asyncHandler(async (req, res) => {
     amount: Math.round(content.price * 100),
     currency: 'INR',
     receipt: `ppv_${Date.now()}`,
-    notes: { contentId: content._id.toString(), userId: req.user._id.toString() }
+    notes: { contentId: content._id.toString(), userId: req.user._id.toString() },
   });
 
   await Transaction.create({
-    userId: req.user._id, type: 'ppv', contentId: content._id,
-    gateway: 'razorpay', gatewayOrderId: order.id,
-    amount: content.price, currency: 'INR', status: 'pending'
+    userId: req.user._id,
+    type: 'ppv',
+    contentId: content._id,
+    gateway: 'razorpay',
+    gatewayOrderId: order.id,
+    amount: content.price,
+    currency: 'INR',
+    status: 'pending',
   });
 
-  res.json(new ApiResponse(200, { orderId: order.id, amount: order.amount, keyId: process.env.RAZORPAY_KEY_ID }));
+  res.json(
+    new ApiResponse(200, {
+      orderId: order.id,
+      amount: order.amount,
+      keyId: process.env.RAZORPAY_KEY_ID,
+    })
+  );
 });
 
 // ── Payment history ───────────────────────────────────
 exports.getHistory = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   const txns = await Transaction.find({ userId: req.user._id })
-    .populate('planId', 'name').populate('contentId', 'title')
-    .sort('-createdAt').skip((page-1)*limit).limit(parseInt(limit));
+    .populate('planId', 'name')
+    .populate('contentId', 'title')
+    .sort('-createdAt')
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit));
   res.json(new ApiResponse(200, txns));
 });
 

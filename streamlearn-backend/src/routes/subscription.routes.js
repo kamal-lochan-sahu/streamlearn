@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const ctrl   = require('../controllers/subscription.controller');
+const ctrl = require('../controllers/subscription.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { isAdmin } = require('../middleware/admin.middleware');
 

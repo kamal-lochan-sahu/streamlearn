@@ -1,11 +1,13 @@
 const { verifyToken } = require('../utils/jwt.utils');
-const { ApiError }    = require('../utils/ApiError');
-const User            = require('../models/User');
+const { ApiError } = require('../utils/ApiError');
+const User = require('../models/User');
 
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : req.cookies?.accessToken;
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : req.cookies?.accessToken;
     if (!token) throw new ApiError(401, 'Access token required');
 
     const decoded = verifyToken(token, process.env.JWT_SECRET);
@@ -16,8 +18,13 @@ const authenticate = async (req, res, next) => {
     req.user = user;
     next();
   } catch (err) {
-    next(err.name === 'JsonWebTokenError' ? new ApiError(401, 'Invalid token') :
-         err.name === 'TokenExpiredError' ? new ApiError(401, 'Token expired')  : err);
+    next(
+      err.name === 'JsonWebTokenError'
+        ? new ApiError(401, 'Invalid token')
+        : err.name === 'TokenExpiredError'
+          ? new ApiError(401, 'Token expired')
+          : err
+    );
   }
 };
 

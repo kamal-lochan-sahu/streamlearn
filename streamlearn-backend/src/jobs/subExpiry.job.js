@@ -10,8 +10,8 @@ cron.schedule('0 9 * * *', async () => {
   for (const days of daysToCheck) {
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + days);
-    const start = new Date(targetDate.setHours(0,0,0,0));
-    const end   = new Date(targetDate.setHours(23,59,59,999));
+    const start = new Date(targetDate.setHours(0, 0, 0, 0));
+    const end = new Date(targetDate.setHours(23, 59, 59, 999));
 
     const users = await User.find({
       'subscription.status': 'active',

@@ -1,7 +1,7 @@
-const Settings  = require('../models/Settings');
-const { ApiError }    = require('../utils/ApiError');
+const Settings = require('../models/Settings');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 const getOrCreate = async (ownerId) => {
   let settings = await Settings.findOne({ ownerId });

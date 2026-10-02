@@ -1,9 +1,9 @@
-const crypto  = require('crypto');
-const User    = require('../models/User');
-const Settings= require('../models/Settings');
+const crypto = require('crypto');
+const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { generateTokenPair, verifyToken } = require('../utils/jwt.utils');
-const { ApiError }   = require('../utils/ApiError');
-const { ApiResponse }= require('../utils/ApiResponse');
+const { ApiError } = require('../utils/ApiError');
+const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { sendWelcomeEmail, sendOTPEmail, sendPasswordResetEmail } = require('../utils/email.utils');
 
@@ -24,11 +24,17 @@ const sendTokens = (res, user, statusCode = 200, message = 'Success') => {
   res.cookie('refreshToken', refreshToken, cookieOptions);
   res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
 
-  res.status(statusCode).json(new ApiResponse(statusCode, {
-    user: user.toSafeObject(),
-    accessToken,
-    refreshToken,
-  }, message));
+  res.status(statusCode).json(
+    new ApiResponse(
+      statusCode,
+      {
+        user: user.toSafeObject(),
+        accessToken,
+        refreshToken,
+      },
+      message
+    )
+  );
 };
 
 // ── Register
@@ -130,7 +136,7 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   if (!user) throw new ApiError(404, 'No account with that email');
 
   const resetToken = crypto.randomBytes(32).toString('hex');
-  user.resetPasswordToken   = crypto.createHash('sha256').update(resetToken).digest('hex');
+  user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
   user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
@@ -153,7 +159,7 @@ exports.resetPassword = asyncHandler(async (req, res) => {
   if (!user) throw new ApiError(400, 'Reset token invalid or expired');
 
   user.password = password;
-  user.resetPasswordToken   = undefined;
+  user.resetPasswordToken = undefined;
   user.resetPasswordExpires = undefined;
   await user.save();
 
@@ -164,7 +170,8 @@ exports.resetPassword = asyncHandler(async (req, res) => {
 exports.changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const user = await User.findById(req.user._id).select('+password');
-  if (!await user.comparePassword(currentPassword)) throw new ApiError(400, 'Current password incorrect');
+  if (!(await user.comparePassword(currentPassword)))
+    throw new ApiError(400, 'Current password incorrect');
   user.password = newPassword;
   await user.save();
   res.json(new ApiResponse(200, {}, 'Password changed'));

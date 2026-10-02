@@ -1,13 +1,15 @@
 const Notification = require('../models/Notification');
-const User         = require('../models/User');
-const { ApiError }    = require('../utils/ApiError');
+const User = require('../models/User');
+const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
-const { asyncHandler }= require('../utils/asyncHandler');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 exports.getAll = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   const notifs = await Notification.find({ userId: req.user._id })
-    .sort('-createdAt').skip((page-1)*limit).limit(parseInt(limit));
+    .sort('-createdAt')
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit));
   const unread = await Notification.countDocuments({ userId: req.user._id, isRead: false });
   res.json(new ApiResponse(200, { notifications: notifs, unread }));
 });
@@ -32,9 +34,9 @@ exports.sendAdmin = asyncHandler(async (req, res) => {
   let targetIds = userIds;
   if (!targetIds || targetIds === 'all') {
     const users = await User.find({ role: 'viewer', isActive: true }).select('_id');
-    targetIds = users.map(u => u._id);
+    targetIds = users.map((u) => u._id);
   }
-  const docs = targetIds.map(userId => ({ userId, title, message, type, channel }));
+  const docs = targetIds.map((userId) => ({ userId, title, message, type, channel }));
   await Notification.insertMany(docs);
   res.json(new ApiResponse(200, { sent: docs.length }, 'Notifications sent'));
 });
