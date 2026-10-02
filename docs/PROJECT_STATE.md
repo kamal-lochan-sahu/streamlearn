@@ -9,7 +9,7 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 
 ## Phases
 
-- [ ] Phase 0: cleanup, tooling (lint, CI, Docker, tests setup)
+- [x] Phase 0: cleanup, tooling (lint, CI, Docker, tests setup)
 - [ ] Phase 1: security and payments (P0 list below)
 - [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
 - [ ] Phase 3: video pipeline (object storage, signed access, ffprobe)
@@ -34,3 +34,16 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 ## Decisions
 
 (none yet)
+
+## Working agreement
+
+- One phase per chat session. At the start of a session, re-read this file and the latest code on GitHub.
+- All changes are made locally, verified, then pushed. Scripts are delivered as downloadable files.
+- Local repo: ~/projects/ott/streamlearn. Local setup: `npm run setup:env && npm run db:up`.
+
+## Session log
+
+- 2026-10-02, Phase 0: removed unused stubs, dependencies and scratch files; added env examples,
+  docker-compose, prettier, editorconfig, CI, backend Dockerfile, README, local env script.
+  Deferred to Phase 4: ESLint config and automated tests. Deferred to Phase 1: removal of no-op
+  controller exports (done together with controller rewrites). LICENSE: owner to decide.
