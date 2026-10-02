@@ -33,9 +33,9 @@ export default defineConfig({
         manualChunks: {
           vendor:    ['react', 'react-dom', 'react-router-dom'],
           query:     ['@tanstack/react-query'],
-          player:    ['video.js', 'hls.js'],
+          player:    ['hls.js'],
           charts:    ['recharts'],
-          ui:        ['lucide-react', 'framer-motion'],
+          ui:        ['lucide-react'],
           socket:    ['socket.io-client'],
         }
       }

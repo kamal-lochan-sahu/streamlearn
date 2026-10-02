@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import videojs from 'video.js'
-import 'video.js/dist/video-css/video-js.css'
 import Hls from 'hls.js'
 
 export default function VideoPlayer({ src, poster, onProgress, onEnded, startTime = 0, options = {} }) {
