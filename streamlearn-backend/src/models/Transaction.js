@@ -5,6 +5,7 @@ const transactionSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     type: { type: String, enum: ['subscription', 'ppv', 'gift', 'refund'], required: true },
     planId: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan' },
+    billingCycle: { type: String, enum: ['monthly', 'yearly', 'lifetime'] },
     contentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Content' },
     gateway: { type: String, enum: ['razorpay', 'stripe', 'manual'] },
     gatewayOrderId: String,
@@ -26,5 +27,9 @@ const transactionSchema = new mongoose.Schema(
 );
 
 transactionSchema.index({ userId: 1, createdAt: -1 });
+transactionSchema.index(
+  { gateway: 1, gatewayOrderId: 1 },
+  { unique: true, partialFilterExpression: { gatewayOrderId: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('Transaction', transactionSchema);

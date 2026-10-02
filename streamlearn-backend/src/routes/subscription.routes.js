@@ -5,7 +5,6 @@ const { isAdmin } = require('../middleware/admin.middleware');
 
 router.use(authenticate);
 router.get('/my', ctrl.getMy);
-router.post('/subscribe', ctrl.subscribe);
 router.put('/cancel', ctrl.cancel);
 router.put('/pause', ctrl.pause);
 router.put('/resume', ctrl.resume);

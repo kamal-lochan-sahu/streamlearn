@@ -20,5 +20,10 @@ const subscriptionSchema = new mongoose.Schema(
 
 subscriptionSchema.index({ userId: 1, status: 1 });
 subscriptionSchema.index({ endDate: 1 });
+// One subscription per paid transaction (makes activation idempotent)
+subscriptionSchema.index(
+  { transactionId: 1 },
+  { unique: true, partialFilterExpression: { transactionId: { $type: 'objectId' } } }
+);
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);

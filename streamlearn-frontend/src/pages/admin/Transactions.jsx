@@ -7,7 +7,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 export default function AdminTransactions() {
   const { data = [], isLoading } = useQuery({
     queryKey: ['admin-transactions'],
-    queryFn: () => api.get('/payments/history?limit=50').then((r) => r.data.data),
+    queryFn: () => api.get('/payments/admin/all?limit=50').then((r) => r.data.data),
   });
   const STATUS = { success: 'green', pending: 'yellow', failed: 'red', refunded: 'blue' };
   return (

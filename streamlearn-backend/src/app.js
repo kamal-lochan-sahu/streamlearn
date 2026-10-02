@@ -20,6 +20,10 @@ app.use(
   })
 );
 
+// ── Payment webhooks need the raw body (signature check), so they are mounted before json parsing
+app.use('/api/payments/razorpay/webhook', express.raw({ type: '*/*', limit: '1mb' }));
+app.use('/api/payments/stripe/webhook', express.raw({ type: '*/*', limit: '1mb' }));
+
 // ── Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

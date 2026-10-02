@@ -11,6 +11,10 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 
 - [x] Phase 0: cleanup, tooling (lint, CI, Docker, tests setup)
 - [ ] Phase 1: security and payments (P0 list below)
+  - [x] 1a: payments, coupons, subscriptions (P0 #1, #2, #5)
+  - [ ] 1b: auth hardening (P0 #6, #10, Google login, trust proxy)
+  - [ ] 1c: access control (P0 #3, #9: streams, uploads, IDOR, sockets)
+  - [ ] 1d: mass assignment and query injection (P0 #4, #11)
 - [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
 - [ ] Phase 3: video pipeline (object storage, signed access, ffprobe)
 - [ ] Phase 4: automated tests (auth, payments, access control)
@@ -33,7 +37,10 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 
 ## Decisions
 
-(none yet)
+- Subscriptions are created only by payment fulfillment (verify or webhook); the public subscribe endpoint is removed.
+- Coupon discount is always computed on the server from the plan price. `free_trial` coupons are rejected until supported.
+- Stripe currency comes from `STRIPE_CURRENCY` (default `inr`) because plan prices are stored in INR.
+- PPV access = a successful `ppv` Transaction (`hasPurchasedContent`); enforced on stream endpoints in 1c.
 
 ## Working agreement
 
@@ -47,3 +54,7 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
   docker-compose, prettier, editorconfig, CI, backend Dockerfile, README, local env script.
   Deferred to Phase 4: ESLint config and automated tests. Deferred to Phase 1: removal of no-op
   controller exports (done together with controller rewrites). LICENSE: owner to decide.
+- 2026-10-02, Phase 1a: payments rewrite (server-side pricing and cycle, signature checks with timing-safe compare,
+  idempotent fulfillment shared by verify and webhooks, raw-body webhooks, ownership check on verify),
+  coupon service with atomic redemption and admin-only CRUD, no-op controller exports removed for payments,
+  subscriptions and coupons. Admin transactions page now uses `/payments/admin/all`.
