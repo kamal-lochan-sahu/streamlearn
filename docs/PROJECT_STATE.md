@@ -12,7 +12,7 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - [x] Phase 0: cleanup, tooling (lint, CI, Docker, tests setup)
 - [ ] Phase 1: security and payments (P0 list below)
   - [x] 1a: payments, coupons, subscriptions (P0 #1, #2, #5)
-  - [ ] 1b: auth hardening (P0 #6, #10, Google login, trust proxy)
+  - [x] 1b: auth hardening (P0 #6, #10, Google login, trust proxy)
   - [ ] 1c: access control (P0 #3, #9: streams, uploads, IDOR, sockets)
   - [ ] 1d: mass assignment and query injection (P0 #4, #11)
 - [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
@@ -41,6 +41,14 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - Coupon discount is always computed on the server from the plan price. `free_trial` coupons are rejected until supported.
 - Stripe currency comes from `STRIPE_CURRENCY` (default `inr`) because plan prices are stored in INR.
 - PPV access = a successful `ppv` Transaction (`hasPurchasedContent`); enforced on stream endpoints in 1c.
+- Sessions: access token (15m) is sent only in the `Authorization` header and stored by the frontend; the refresh token lives only in an httpOnly cookie (path `/api/auth`), is stored hashed in the DB and rotates on every refresh. No `accessToken` cookie exists anymore and the backend ignores cookies for access.
+- Cookie SameSite: `lax` in dev, `none; Secure` in production, override with `COOKIE_SAMESITE`. Safari and Chrome block third-party cookies, so for production serve the API under the same site as the frontend (custom domain like `api.example.com` + `app.example.com`, or a Vercel rewrite of `/api` to the backend) and set `COOKIE_SAMESITE=lax`. Decide this in Phase 5.
+- Only one refresh token is stored per user, so logging in on a second device signs out the first one. Revisit if multi-device sessions are needed.
+- Public sign-up always creates a `viewer`. The first owner is created with `npm run create-owner -- <email> "<name>"` (also promotes an existing account).
+- OTP: 6 digits from `crypto.randomInt`, stored hashed, 5 guesses per code (counted atomically), then locked for 15 minutes, 60 second resend cooldown. `send-otp` and `forgot-password` return the same answer whether or not the account exists.
+- Google login: the callback redirects to `CLIENT_URL/auth/callback?code=...` with a one-time code (60s, single use); the frontend swaps it via `POST /auth/google/exchange`. A `state` cookie protects against login CSRF. Linking Google to an unverified local account wipes that account's password. Without `GOOGLE_*` env vars the server still boots and `/auth/google` answers 503.
+- Passwords: minimum 8 characters (register, reset, change). Reset and change password end all other sessions.
+- `TRUST_PROXY` (hops, default 1 in production) makes rate limits use the real client IP behind Render/Vercel.
 
 ## Working agreement
 
@@ -58,3 +66,4 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
   idempotent fulfillment shared by verify and webhooks, raw-body webhooks, ownership check on verify),
   coupon service with atomic redemption and admin-only CRUD, no-op controller exports removed for payments,
   subscriptions and coupons. Admin transactions page now uses `/payments/admin/all`.
+- 2026-10-04, Phase 1b: auth rewrite (hashed rotating refresh tokens, Origin check on refresh/logout/exchange, header-only access tokens, OTP attempt limit and lockout, no account discovery on OTP/forgot, owner only via script, Google login via one-time code with state, trust proxy, env validation at startup, separate rate limiters). Frontend: refresh interceptor no longer loops (single refresh shared by parallel requests, auth endpoints excluded, no redirect when already on /login), `/auth/callback` page, `API_URL` export, Register password minimum 8.

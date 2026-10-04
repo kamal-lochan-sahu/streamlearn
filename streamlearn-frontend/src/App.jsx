@@ -7,6 +7,7 @@ import Loader from './components/common/Loader';
 // Auth
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
+const GoogleCallback = lazy(() => import('./pages/auth/GoogleCallback'));
 const Onboarding = lazy(() => import('./pages/auth/Onboarding'));
 const ProfileSelect = lazy(() => import('./pages/auth/ProfileSelect'));
 // Viewer
@@ -69,6 +70,7 @@ export default function App() {
             </PublicRoute>
           }
         />
+        <Route path="/auth/callback" element={<GoogleCallback />} />
         <Route
           path="/register"
           element={

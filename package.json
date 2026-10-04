@@ -13,7 +13,8 @@
     "dev:backend": "npm --prefix streamlearn-backend run dev",
     "dev:frontend": "npm --prefix streamlearn-frontend run dev",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "create-owner": "npm --prefix streamlearn-backend run create-owner --"
   },
   "devDependencies": {
     "prettier": "^3.9.9"

@@ -10,6 +10,15 @@ const { globalLimiter } = require('./middleware/rateLimit.middleware');
 
 const app = express();
 
+// Behind a reverse proxy (Render, Vercel rewrites, nginx) req.ip is the proxy unless we trust it.
+// Rate limiting and logs need the real client IP. TRUST_PROXY = number of proxy hops (default 1 in production).
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy !== undefined && trustProxy !== '') {
+  app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === 'true');
+} else if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ── Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(

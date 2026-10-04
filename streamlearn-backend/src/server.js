@@ -4,6 +4,7 @@ const app = require('./app');
 const { connectDB } = require('./config/db');
 const { connectRedis } = require('./config/redis');
 const { initSocket } = require('./config/socket');
+const { validateEnv } = require('./config/validateEnv');
 
 const PORT = process.env.PORT || 5000;
 
@@ -11,6 +12,7 @@ const server = http.createServer(app);
 initSocket(server);
 
 async function start() {
+  validateEnv();
   await connectDB();
   await connectRedis();
 

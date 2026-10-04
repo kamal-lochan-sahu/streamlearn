@@ -1,16 +1,23 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import toast from 'react-hot-toast';
+import { API_URL } from '../../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuthStore();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'google_failed')
+      toast.error('Google sign-in failed. Please try again.');
+  }, [searchParams]);
 
   const validate = () => {
     const e = {};
@@ -146,7 +153,7 @@ export default function Login() {
 
               {/* Google */}
               <a
-                href={`${import.meta.env.VITE_API_URL}/auth/google`}
+                href={`${API_URL}/auth/google`}
                 className="w-full bg-bg-surface border border-border hover:border-white/40 text-white font-medium py-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm"
               >
                 <svg width="18" height="18" viewBox="0 0 18 18">

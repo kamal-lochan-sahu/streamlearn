@@ -49,11 +49,18 @@ const userSchema = new mongoose.Schema(
     },
     isVerified: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
-    otp: { code: String, expiresAt: Date },
+    otp: {
+      codeHash: String,
+      expiresAt: Date,
+      attempts: { type: Number, default: 0 },
+      sentAt: Date,
+      lockedUntil: Date,
+    },
+    oauthCode: { hash: String, expiresAt: Date },
     refreshToken: String,
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    googleId: String,
+    googleId: { type: String, index: { unique: true, sparse: true } },
     lastLogin: Date,
   },
   { timestamps: true }
@@ -75,7 +82,9 @@ userSchema.methods.toSafeObject = function () {
   delete obj.password;
   delete obj.refreshToken;
   delete obj.otp;
+  delete obj.oauthCode;
   delete obj.resetPasswordToken;
+  delete obj.resetPasswordExpires;
   return obj;
 };
 

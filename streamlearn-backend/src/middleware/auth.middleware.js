@@ -4,10 +4,9 @@ const User = require('../models/User');
 
 const authenticate = async (req, res, next) => {
   try {
+    // Bearer header only. Cookies are never accepted here (they would be CSRF-able).
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : req.cookies?.accessToken;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
     if (!token) throw new ApiError(401, 'Access token required');
 
     const decoded = verifyToken(token, process.env.JWT_SECRET);

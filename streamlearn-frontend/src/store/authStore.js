@@ -33,12 +33,31 @@ export const useAuthStore = create(
         return data;
       },
 
+      googleLogin: async (code) => {
+        const { data } = await api.post('/auth/google/exchange', { code });
+        set({
+          user: data.data.user,
+          accessToken: data.data.accessToken,
+          isAuthenticated: true,
+          activeProfileIndex: data.data.user.activeProfile || 0,
+        });
+        api.defaults.headers.common['Authorization'] = `Bearer ${data.data.accessToken}`;
+        return data;
+      },
+
+      // Local-only: forget the session without calling the API (used when the refresh failed)
+      clearSession: () => {
+        delete api.defaults.headers.common['Authorization'];
+        set({ user: null, accessToken: null, isAuthenticated: false });
+      },
+
       logout: async () => {
         try {
           await api.post('/auth/logout');
-        } catch {}
-        delete api.defaults.headers.common['Authorization'];
-        set({ user: null, accessToken: null, isAuthenticated: false });
+        } catch {
+          // even if the server is unreachable we still sign out locally
+        }
+        get().clearSession();
       },
 
       updateUser: (updates) => set((state) => ({ user: { ...state.user, ...updates } })),

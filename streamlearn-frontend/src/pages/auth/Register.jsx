@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import toast from 'react-hot-toast';
+import { API_URL } from '../../services/api';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export default function Register() {
     if (!form.email) e.email = 'Email required';
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Invalid email';
     if (!form.password) e.password = 'Password required';
-    else if (form.password.length < 6) e.password = 'Min 6 characters';
+    else if (form.password.length < 8) e.password = 'Min 8 characters';
     if (form.phone && !/^[6-9]\d{9}$/.test(form.phone)) e.phone = 'Invalid Indian mobile number';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -107,7 +108,7 @@ export default function Register() {
                       key={i}
                       className={`h-1 flex-1 rounded-full transition-all ${
                         form.password.length >= (i + 1) * 3
-                          ? form.password.length < 6
+                          ? form.password.length < 8
                             ? 'bg-red-500'
                             : form.password.length < 9
                               ? 'bg-yellow-500'
@@ -142,7 +143,7 @@ export default function Register() {
 
               {/* Google */}
               <a
-                href={`${import.meta.env.VITE_API_URL}/auth/google`}
+                href={`${API_URL}/auth/google`}
                 className="w-full bg-bg-surface border border-border hover:border-white/40 text-white font-medium py-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm"
               >
                 <svg width="18" height="18" viewBox="0 0 18 18">
