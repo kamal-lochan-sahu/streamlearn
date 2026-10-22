@@ -23,7 +23,7 @@ exports.create = asyncHandler(async (req, res) => {
     });
   }
   await review.populate('userId', 'name avatar');
-  res.json(new ApiResponse(201, review, 'Review added'));
+  res.status(201).json(new ApiResponse(201, review, 'Review added'));
 });
 
 exports.getByContent = asyncHandler(async (req, res) => {

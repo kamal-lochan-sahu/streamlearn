@@ -1,93 +1,96 @@
+const fs = require('fs');
+const path = require('path');
 const cloudinary = require('../config/cloudinary');
 const { transcodingQueue } = require('../queue/jobQueue');
-const Content = require('../models/Content');
 const Episode = require('../models/Episode');
 const Lecture = require('../models/Lecture');
+const { loadManageableContent, isStaff } = require('../services/access.service');
+const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
+const { videoUpload, imageUpload, pdfUpload, removeFile } = require('../utils/upload.utils');
+const { requireObjectId } = require('../utils/validate.utils');
 const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const d = './uploads/temp';
-    fs.mkdirSync(d, { recursive: true });
-    cb(null, d);
-  },
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`),
-});
+exports.videoUploadMiddleware = videoUpload;
+exports.imageUploadMiddleware = imageUpload;
+exports.pdfUploadMiddleware = pdfUpload;
 
-exports.videoUploadMiddleware = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // 10GB
-}).single('video');
+const IMAGE_FOLDERS = ['uploads', 'thumbnails', 'banners', 'avatars'];
 
-exports.imageUploadMiddleware = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) =>
-    file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Images only')),
-}).single('image');
-
-exports.pdfUploadMiddleware = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 },
-  fileFilter: (req, file, cb) =>
-    file.mimetype === 'application/pdf' ? cb(null, true) : cb(new Error('PDF only')),
-}).single('pdf');
-
-// POST /api/upload/video
+// POST /api/upload/video  { contentId, model: content | episode | lecture }
 exports.uploadVideo = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'Video file required');
-  const { contentId, model = 'content' } = req.body;
-  if (!contentId) throw new ApiError(400, 'contentId required');
+  try {
+    const { contentId, model = 'content' } = req.body;
+    requireObjectId(contentId, 'content id');
+    if (!['content', 'episode', 'lecture'].includes(model))
+      throw new ApiError(400, 'Invalid model');
 
-  const ModelMap = { content: Content, episode: Episode, lecture: Lecture };
-  const Model = ModelMap[model];
-  if (!Model) throw new ApiError(400, 'Invalid model');
+    // Find the course/series/movie this video belongs to, and make sure the user owns it
+    let rootContentId = contentId;
+    let Model;
+    if (model === 'episode' || model === 'lecture') {
+      Model = model === 'episode' ? Episode : Lecture;
+      const item = await Model.findById(contentId).select('contentId');
+      if (!item) throw new ApiError(404, `${model} not found`);
+      rootContentId = item.contentId;
+    } else {
+      Model = require('../models/Content');
+    }
+    await loadManageableContent(req.user, rootContentId);
 
-  const outputDir = path.join('./uploads/hls', contentId);
-  fs.mkdirSync(outputDir, { recursive: true });
+    const outputDir = path.join(hlsRoot(), hlsDirName(model, contentId));
+    fs.mkdirSync(outputDir, { recursive: true });
 
-  await Model.findByIdAndUpdate(contentId, { transcodeStatus: 'processing' });
-  const job = await transcodingQueue.add({ inputPath: req.file.path, outputDir, contentId, model });
-  res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding queued' }));
+    await Model.findByIdAndUpdate(contentId, { transcodeStatus: 'processing' });
+    const job = await transcodingQueue.add({
+      inputPath: req.file.path,
+      outputDir,
+      contentId,
+      model,
+      ownerId: String(req.user._id),
+    });
+    res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding queued' }));
+  } catch (err) {
+    removeFile(req.file.path);
+    throw err;
+  }
 });
 
 // POST /api/upload/image
 exports.uploadImage = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'Image required');
-  const { folder = 'uploads' } = req.body;
-  const result = await cloudinary.uploader.upload(req.file.path, { folder });
-  fs.unlinkSync(req.file.path);
-  res.json(new ApiResponse(200, { url: result.secure_url, publicId: result.public_id }));
+  try {
+    const folder = IMAGE_FOLDERS.includes(req.body.folder) ? req.body.folder : 'uploads';
+    const result = await cloudinary.uploader.upload(req.file.path, { folder });
+    res.json(new ApiResponse(200, { url: result.secure_url, publicId: result.public_id }));
+  } finally {
+    removeFile(req.file.path);
+  }
 });
 
 // POST /api/upload/pdf
 exports.uploadPDF = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'PDF required');
-  const result = await cloudinary.uploader.upload(req.file.path, {
-    folder: 'notes',
-    resource_type: 'raw',
-    format: 'pdf',
-  });
-  fs.unlinkSync(req.file.path);
-  res.json(new ApiResponse(200, { url: result.secure_url }));
+  try {
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: 'notes',
+      resource_type: 'raw',
+      format: 'pdf',
+    });
+    res.json(new ApiResponse(200, { url: result.secure_url }));
+  } finally {
+    removeFile(req.file.path);
+  }
 });
 
-// GET /api/upload/status/:jobId
+// GET /api/upload/status/:jobId  (only the person who started the job, or staff)
 exports.getTranscodeStatus = asyncHandler(async (req, res) => {
   const job = await transcodingQueue.getJob(req.params.jobId);
   if (!job) throw new ApiError(404, 'Job not found');
+  if (!isStaff(req.user) && job.data?.ownerId !== String(req.user._id))
+    throw new ApiError(404, 'Job not found');
   const state = await job.getState();
-  const progress = job._progress;
-  res.json(new ApiResponse(200, { jobId: job.id, state, progress }));
+  res.json(new ApiResponse(200, { jobId: job.id, state, progress: job._progress }));
 });
-
-exports.getAll = asyncHandler(async (req, res) => res.json(new ApiResponse(200, [])));
-exports.getOne = exports.getTranscodeStatus;
-exports.create = exports.uploadVideo;
-exports.update = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));
-exports.remove = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));

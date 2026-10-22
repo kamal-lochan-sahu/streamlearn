@@ -3,9 +3,11 @@ const ctrl = require('../controllers/upload.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { isCreator } = require('../middleware/admin.middleware');
 
-router.post('/video', authenticate, isCreator, ctrl.videoUploadMiddleware, ctrl.uploadVideo);
-router.post('/image', authenticate, ctrl.imageUploadMiddleware, ctrl.uploadImage);
-router.post('/pdf', authenticate, ctrl.pdfUploadMiddleware, ctrl.uploadPDF);
-router.get('/status/:jobId', authenticate, ctrl.getTranscodeStatus);
+// Uploads cost money (Cloudinary, transcoding), so only creators and staff may use them.
+router.use(authenticate, isCreator);
+router.post('/video', ctrl.videoUploadMiddleware, ctrl.uploadVideo);
+router.post('/image', ctrl.imageUploadMiddleware, ctrl.uploadImage);
+router.post('/pdf', ctrl.pdfUploadMiddleware, ctrl.uploadPDF);
+router.get('/status/:jobId', ctrl.getTranscodeStatus);
 
 module.exports = router;

@@ -7,6 +7,7 @@ router.get('/', optionalAuth, ctrl.getAll);
 router.get('/:id', optionalAuth, ctrl.getOne);
 router.get('/:id/stream-url', authenticate, ctrl.getHLSUrl);
 router.post('/admin/create', authenticate, isCreator, ctrl.create);
+router.get('/admin/:id/credentials', authenticate, isCreator, ctrl.getCredentials);
 router.put('/admin/:id', authenticate, isCreator, ctrl.update);
 router.delete('/admin/:id', authenticate, isCreator, ctrl.remove);
 router.post('/admin/:id/start', authenticate, isCreator, ctrl.startStream);

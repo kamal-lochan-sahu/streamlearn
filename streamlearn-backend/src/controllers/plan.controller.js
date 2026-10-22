@@ -15,7 +15,7 @@ exports.getAllAdmin = asyncHandler(async (req, res) => {
 
 exports.create = asyncHandler(async (req, res) => {
   const plan = await Plan.create(req.body);
-  res.json(new ApiResponse(201, plan, 'Plan created'));
+  res.status(201).json(new ApiResponse(201, plan, 'Plan created'));
 });
 
 exports.update = asyncHandler(async (req, res) => {

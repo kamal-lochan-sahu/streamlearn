@@ -25,17 +25,18 @@ export default function Watch() {
       return api
         .get(`/content/${id}/stream`)
         .then((r) => r.data.data)
-        .catch(() => null);
+        .catch((err) => ({ blocked: err.response?.status }));
     },
   });
 
   const { data: progress } = useQuery({
-    queryKey: ['progress-ts', id],
+    queryKey: ['progress-ts', streamData?.contentId],
     queryFn: () =>
       api
-        .get(`/progress/content/${id}`)
+        .get(`/progress/content/${streamData.contentId}`)
         .then((r) => r.data.data)
         .catch(() => null),
+    enabled: !!streamData?.contentId,
   });
 
   const saveProgress = useMutation({
@@ -53,8 +54,24 @@ export default function Watch() {
   if (!streamData?.url)
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <p className="text-white text-lg">Stream not available.</p>
-        <p className="text-text-secondary text-sm">Video may still be processing.</p>
+        <p className="text-white text-lg">
+          {streamData?.blocked === 403
+            ? 'Subscription or purchase required.'
+            : 'Stream not available.'}
+        </p>
+        <p className="text-text-secondary text-sm">
+          {streamData?.blocked === 403
+            ? 'Subscribe or buy this title to start watching.'
+            : 'Video may still be processing.'}
+        </p>
+        {streamData?.blocked === 403 && (
+          <button
+            onClick={() => navigate('/subscription')}
+            className="text-brand hover:underline text-sm"
+          >
+            See plans
+          </button>
+        )}
         <button onClick={() => navigate(-1)} className="text-brand hover:underline text-sm">
           Go back
         </button>

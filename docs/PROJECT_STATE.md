@@ -13,7 +13,7 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - [ ] Phase 1: security and payments (P0 list below)
   - [x] 1a: payments, coupons, subscriptions (P0 #1, #2, #5)
   - [x] 1b: auth hardening (P0 #6, #10, Google login, trust proxy)
-  - [ ] 1c: access control (P0 #3, #9: streams, uploads, IDOR, sockets)
+  - [x] 1c: access control (P0 #3, #9: streams, uploads, IDOR, sockets)
   - [ ] 1d: mass assignment and query injection (P0 #4, #11)
 - [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
 - [ ] Phase 3: video pipeline (object storage, signed access, ffprobe)
@@ -48,6 +48,11 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - OTP: 6 digits from `crypto.randomInt`, stored hashed, 5 guesses per code (counted atomically), then locked for 15 minutes, 60 second resend cooldown. `send-otp` and `forgot-password` return the same answer whether or not the account exists.
 - Google login: the callback redirects to `CLIENT_URL/auth/callback?code=...` with a one-time code (60s, single use); the frontend swaps it via `POST /auth/google/exchange`. A `state` cookie protects against login CSRF. Linking Google to an unverified local account wipes that account's password. Without `GOOGLE_*` env vars the server still boots and `/auth/google` answers 503.
 - Passwords: minimum 8 characters (register, reset, change). Reset and change password end all other sessions.
+- Video playback: `GET /content/:slug/stream`, `/episodes/:id/stream`, `/lectures/:id/stream` check access first (`services/access.service.js`: free, active subscription, successful PPV purchase, owner/staff, published and not expired; free-preview lectures work for any logged-in user) and return a signed link `<STREAM_BASE_URL or request host>/hls/<token>/master.m3u8`. The token is a 4h JWT (audience `hls`) for ONE video folder and sits in the URL path, so playlists and segments inherit it. `/uploads` is no longer served; HLS files are only readable through `/hls`. `videoFiles` now store relative paths, never URLs, and are never sent in detail/listing responses.
+- Roles: `owner`/`admin` manage everything; `creator` only content (and its episodes, lectures, assignments, streams) they own. Assignments, doubts and progress need access to the course. Students see only their own assignment submission.
+- Sockets: every namespace requires a valid access token (user is loaded from the DB), `join-stream`/`join-party` check audience/membership, messages are length- and rate-limited, only the host controls watch-party playback, one poll vote per person (atomic).
+- Live streams: viewers never receive `streamKey`, `rtmpUrl`, `hlsUrl` or `recordingUrl`; they get the playback link from `/live/:id/stream-url` after the audience check. Known gap: the live HLS server itself (nginx-rtmp or similar) is still outside this app, so its URL is not signed. Protect it in Phase 5 (secure link module or move to a managed live service).
+- Mongo portability: positional `$` updates, `$pull` on subdocuments and `$ne` on nested arrays are avoided (FerretDB, used in sandbox tests, evaluates them wrongly). Use `$nor`, load-modify-save with version retry, etc.
 - `TRUST_PROXY` (hops, default 1 in production) makes rate limits use the real client IP behind Render/Vercel.
 
 ## Working agreement
@@ -67,3 +72,4 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
   coupon service with atomic redemption and admin-only CRUD, no-op controller exports removed for payments,
   subscriptions and coupons. Admin transactions page now uses `/payments/admin/all`.
 - 2026-10-04, Phase 1b: auth rewrite (hashed rotating refresh tokens, Origin check on refresh/logout/exchange, header-only access tokens, OTP attempt limit and lockout, no account discovery on OTP/forgot, owner only via script, Google login via one-time code with state, trust proxy, env validation at startup, separate rate limiters). Frontend: refresh interceptor no longer loops (single refresh shared by parallel requests, auth endpoints excluded, no redirect when already on /login), `/auth/callback` page, `API_URL` export, Register password minimum 8.
+- 2026-10-23, Phase 1c: private signed video links (`/hls`), access service used by stream/assignment/doubt/progress/live/watch-party, creator ownership checks on every content mutation, mass-assignment guards on content/episode/lecture/live updates, IDOR fixes (notifications, assignments, doubts, live start/end/update/delete), upload hardening (creators only, type filter, random filenames, temp files removed on refusal; fixed `rule.test is not a function` crash in the filter), socket auth per namespace, real HTTP 201 on create endpoints. Removed unused `subscription.middleware.js` and `streaming.service.js`.

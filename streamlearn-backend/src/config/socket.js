@@ -1,5 +1,4 @@
 const { Server } = require('socket.io');
-const { verifyToken } = require('../utils/jwt.utils');
 const liveChatSocket = require('../socket/liveChat.socket');
 const watchPartySocket = require('../socket/watchParty.socket');
 const liveStreamSocket = require('../socket/liveStream.socket');
@@ -12,18 +11,8 @@ const initSocket = (server) => {
     pingTimeout: 60000,
   });
 
-  // Auth middleware
-  io.use(async (socket, next) => {
-    try {
-      const token =
-        socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
-      if (token) {
-        const decoded = verifyToken(token, process.env.JWT_SECRET);
-        socket.user = decoded;
-      }
-    } catch {}
-    next();
-  });
+  // Authentication is done per namespace (io.use() would only cover the main "/" namespace),
+  // see socket/socket.utils.js. Connections without a valid access token are rejected.
 
   // Namespaces
   liveChatSocket(io.of('/live-chat'));

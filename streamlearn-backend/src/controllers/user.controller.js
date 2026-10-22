@@ -60,7 +60,7 @@ exports.addProfile = asyncHandler(async (req, res) => {
   if (!name) throw new ApiError(400, 'Name required');
   user.profiles.push({ name, kidMode });
   await user.save();
-  res.json(new ApiResponse(201, user.profiles, 'Profile added'));
+  res.status(201).json(new ApiResponse(201, user.profiles, 'Profile added'));
 });
 
 exports.updateProfileByIndex = asyncHandler(async (req, res) => {

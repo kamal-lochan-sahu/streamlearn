@@ -192,9 +192,9 @@ export default function CourseLearn() {
             )}
 
             {activeTab === 'notes' &&
-              (currentLec?.notes ? (
+              (streamData?.notes ? (
                 <a
-                  href={currentLec.notes}
+                  href={streamData.notes}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-brand hover:underline text-sm"

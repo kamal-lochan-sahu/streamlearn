@@ -22,7 +22,7 @@ transcodingQueue.process(async (job) => {
       job.progress(Math.floor(percent));
     });
 
-    const videoFiles = await uploadHLSToCloudinary(outputDir, contentId);
+    const videoFiles = await uploadHLSToCloudinary(outputDir);
 
     const ModelMap = { content: Content, episode: Episode, lecture: Lecture };
     const Model = ModelMap[model] || Content;

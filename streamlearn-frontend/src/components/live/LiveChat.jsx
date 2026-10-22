@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useLiveStore } from '../../store/liveStore';
 import { useAuthStore } from '../../store/authStore';
 import { liveChatSocket, connectLiveChat } from '../../socket/socket';
@@ -12,8 +13,15 @@ export default function LiveChat({ streamId }) {
   const endRef = useRef(null);
 
   useEffect(() => {
+    const join = () => liveChatSocket.emit('join-stream', { streamId });
     connectLiveChat();
-    liveChatSocket.emit('join-stream', { streamId });
+    join();
+    // rooms are lost when the connection drops, so join again after every reconnect
+    liveChatSocket.on('connect', join);
+    liveChatSocket.on('socket-error', ({ message }) => toast.error(message));
+    liveChatSocket.on('connect_error', (err) => {
+      if (err.message === 'Unauthorized') toast.error('Please log in again to join the chat');
+    });
 
     liveChatSocket.on('new-message', (msg) => addMessage(msg));
     liveChatSocket.on('viewer-count-update', ({ count }) =>
@@ -25,6 +33,9 @@ export default function LiveChat({ streamId }) {
 
     return () => {
       liveChatSocket.emit('leave-stream', { streamId });
+      liveChatSocket.off('connect', join);
+      liveChatSocket.off('socket-error');
+      liveChatSocket.off('connect_error');
       liveChatSocket.off('new-message');
       liveChatSocket.off('viewer-count-update');
     };

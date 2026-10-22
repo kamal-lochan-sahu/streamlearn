@@ -42,8 +42,9 @@ app.use(compression());
 // ── Logging (dev only)
 if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
-// ── Static — HLS segments served directly
-app.use('/uploads', express.static('uploads'));
+// ── Video files. NOT static: every request needs a signed stream token (see routes/hls.routes.js).
+// Mounted before the /api rate limiter because a video makes many small requests.
+app.use('/hls', require('./routes/hls.routes'));
 
 // ── Rate limiting
 app.use('/api', globalLimiter);

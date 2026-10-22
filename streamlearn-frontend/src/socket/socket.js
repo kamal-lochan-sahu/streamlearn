@@ -13,26 +13,26 @@ const getToken = () => {
 
 export const liveChatSocket = io(`${SOCKET_URL}/live-chat`, {
   autoConnect: false,
-  auth: { token: getToken() },
+  // a function, so every reconnect uses the CURRENT access token (tokens expire every 15 minutes)
+  auth: (cb) => cb({ token: getToken() }),
 });
 export const watchPartySocket = io(`${SOCKET_URL}/watch-party`, {
   autoConnect: false,
-  auth: { token: getToken() },
+  // a function, so every reconnect uses the CURRENT access token (tokens expire every 15 minutes)
+  auth: (cb) => cb({ token: getToken() }),
 });
 export const liveStreamSocket = io(`${SOCKET_URL}/live-stream`, {
   autoConnect: false,
-  auth: { token: getToken() },
+  // a function, so every reconnect uses the CURRENT access token (tokens expire every 15 minutes)
+  auth: (cb) => cb({ token: getToken() }),
 });
 
 export const connectLiveChat = () => {
-  liveChatSocket.auth = { token: getToken() };
-  liveChatSocket.connect();
+  if (!liveChatSocket.connected) liveChatSocket.connect();
 };
 export const connectWatchParty = () => {
-  watchPartySocket.auth = { token: getToken() };
-  watchPartySocket.connect();
+  if (!watchPartySocket.connected) watchPartySocket.connect();
 };
 export const connectLiveStream = () => {
-  liveStreamSocket.auth = { token: getToken() };
-  liveStreamSocket.connect();
+  if (!liveStreamSocket.connected) liveStreamSocket.connect();
 };

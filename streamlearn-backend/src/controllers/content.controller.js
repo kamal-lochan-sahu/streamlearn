@@ -5,27 +5,40 @@ const Lecture = require('../models/Lecture');
 const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { generateSignedUrl } = require('../utils/hls.utils');
+const { buildStreamUrl, QUALITIES } = require('../utils/hls.utils');
 const { get: cGet, set: cSet, del: cDel } = require('../services/cache.service');
 const { transcodingQueue } = require('../queue/jobQueue');
 const cloudinary = require('../config/cloudinary');
-const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 const slugify = require('slugify');
+const {
+  checkContentAccess,
+  assertAllowed,
+  loadManageableContent,
+  CONTENT_ACCESS_FIELDS,
+} = require('../services/access.service');
+const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
+const { videoUpload, imageUpload, removeFile } = require('../utils/upload.utils');
+const { requireObjectId, omitKeys } = require('../utils/validate.utils');
 
-// ── Multer setup ──────────────────────────────────────
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = process.env.TEMP_UPLOAD_PATH || './uploads/temp';
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`),
-});
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
-exports.uploadMiddleware = upload.single('video');
-exports.imageUploadMiddleware = upload.single('image');
+exports.uploadMiddleware = videoUpload;
+exports.imageUploadMiddleware = imageUpload;
+
+// Fields only the server may set (an update must never rewrite ownership, video files or stats)
+const SERVER_MANAGED = [
+  '_id',
+  '__v',
+  'createdAt',
+  'updatedAt',
+  'ownerId',
+  'slug',
+  'videoFiles',
+  'transcodeStatus',
+  'viewCount',
+  'rating',
+];
+
+const detailKey = (slug) => `content:detail:v2:${slug}`;
 
 // ── helpers ──────────────────────────────────────────
 const makeSlug = async (title, id = null) => {
@@ -137,14 +150,14 @@ exports.getRecommendations = asyncHandler(async (req, res) => {
 // ── GET /api/content/:slug ────────────────────────────
 exports.getBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
-  const cacheKey = `content:detail:${slug}`;
+  const cacheKey = detailKey(slug);
   const cached = await cGet(cacheKey);
   if (cached) return res.json(new ApiResponse(200, cached));
 
-  const content = await Content.findOne({ slug, isActive: true }).populate(
-    'instructor',
-    'name avatar'
-  );
+  // videoFiles never leave the server through this endpoint; playback goes through /stream
+  const content = await Content.findOne({ slug, isActive: true })
+    .select('-videoFiles')
+    .populate('instructor', 'name avatar');
   if (!content) throw new ApiError(404, 'Content not found');
 
   // Increment view count
@@ -159,7 +172,11 @@ exports.getBySlug = asyncHandler(async (req, res) => {
   if (content.type === 'course') {
     extra.sections = await Section.find({ contentId: content._id })
       .sort('order')
-      .populate({ path: 'lectures', select: '-videoFiles', options: { sort: { order: 1 } } });
+      .populate({
+        path: 'lectures',
+        select: '-videoFiles -notes -transcript',
+        options: { sort: { order: 1 } },
+      });
   }
 
   const data = { ...content.toObject(), ...extra };
@@ -168,23 +185,36 @@ exports.getBySlug = asyncHandler(async (req, res) => {
 });
 
 // ── GET /api/content/:slug/stream ────────────────────
+// The access check (free / subscription / purchase / owner) happens here, before a playback
+// link is created. The link itself is a short-lived signed token (see utils/hls.utils.js).
 exports.getStreamUrl = asyncHandler(async (req, res) => {
   const { slug } = req.params;
   const { quality = 'master' } = req.query;
-  const content = await Content.findOne({ slug }).select('videoFiles access type');
+  const content = await Content.findOne({ slug }).select(
+    `videoFiles type thumbnail ${CONTENT_ACCESS_FIELDS}`
+  );
   if (!content) throw new ApiError(404, 'Content not found');
+  assertAllowed(await checkContentAccess(req.user, content));
 
-  const videoFiles = content.videoFiles;
-  if (!videoFiles?.master) throw new ApiError(404, 'Video not ready yet');
-
-  const url = quality === 'master' ? videoFiles.master : videoFiles[quality] || videoFiles.master;
-  const signedUrl = generateSignedUrl(url);
-  res.json(new ApiResponse(200, { url: signedUrl, quality }));
+  if (!content.videoFiles?.master) throw new ApiError(404, 'Video not ready yet');
+  const wanted = QUALITIES.includes(quality) && content.videoFiles[quality] ? quality : 'master';
+  const url = buildStreamUrl(req, hlsDirName('content', content._id), wanted);
+  res.json(
+    new ApiResponse(200, {
+      url,
+      quality: wanted,
+      contentId: content._id,
+      thumbnail: content.thumbnail,
+    })
+  );
 });
 
 // ── GET /api/content/:id/related ─────────────────────
 exports.getRelated = asyncHandler(async (req, res) => {
-  const content = await Content.findById(req.params.id).select('type genre');
+  requireObjectId(req.params.id);
+  const content = await Content.findOne({ _id: req.params.id, isActive: true }).select(
+    'type genre'
+  );
   if (!content) throw new ApiError(404, 'Content not found');
   const items = await Content.find({
     isActive: true,
@@ -206,7 +236,7 @@ exports.search = asyncHandler(async (req, res) => {
 
 // ── GET /api/content/:slug/episodes ──────────────────
 exports.getEpisodes = asyncHandler(async (req, res) => {
-  const content = await Content.findOne({ slug: req.params.slug });
+  const content = await Content.findOne({ slug: req.params.slug, isActive: true });
   if (!content) throw new ApiError(404, 'Content not found');
   const episodes = await Episode.find({ contentId: content._id, isActive: true })
     .sort('seasonNumber episodeNumber')
@@ -253,14 +283,18 @@ exports.create = asyncHandler(async (req, res) => {
     tags: tags || [],
     instructor: req.user._id,
   });
-  res.json(new ApiResponse(201, content, 'Content created'));
+  res.status(201).json(new ApiResponse(201, content, 'Content created'));
 });
 
 // ── ADMIN: PUT /api/content/admin/:id ────────────────
 exports.update = asyncHandler(async (req, res) => {
-  const content = await Content.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  if (!content) throw new ApiError(404, 'Content not found');
-  await cDel(`content:detail:${content.slug}`);
+  await loadManageableContent(req.user, req.params.id);
+  const content = await Content.findByIdAndUpdate(
+    req.params.id,
+    omitKeys(req.body, SERVER_MANAGED),
+    { new: true, runValidators: true }
+  );
+  await cDel(detailKey(content.slug));
   res.json(new ApiResponse(200, content, 'Updated'));
 });
 
@@ -268,53 +302,57 @@ exports.update = asyncHandler(async (req, res) => {
 exports.remove = asyncHandler(async (req, res) => {
   const content = await Content.findByIdAndDelete(req.params.id);
   if (!content) throw new ApiError(404, 'Content not found');
-  await cDel(`content:detail:${content.slug}`);
+  await cDel(detailKey(content.slug));
   res.json(new ApiResponse(200, {}, 'Deleted'));
 });
 
 // ── ADMIN: POST /api/content/admin/:id/upload ─────────
 exports.uploadVideo = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'Video file required');
-  const { id } = req.params;
-  const content = await Content.findById(id);
-  if (!content) throw new ApiError(404, 'Content not found');
+  try {
+    const content = await loadManageableContent(req.user, req.params.id);
+    const id = String(content._id);
 
-  const outputDir = path.join(process.env.HLS_OUTPUT_PATH || './uploads/hls', id);
-  fs.mkdirSync(outputDir, { recursive: true });
+    const outputDir = require('path').join(hlsRoot(), hlsDirName('content', id));
+    fs.mkdirSync(outputDir, { recursive: true });
 
-  await Content.findByIdAndUpdate(id, { transcodeStatus: 'processing' });
+    await Content.findByIdAndUpdate(id, { transcodeStatus: 'processing' });
 
-  const job = await transcodingQueue.add({
-    inputPath: req.file.path,
-    outputDir,
-    contentId: id,
-    model: 'content',
-    type: content.type,
-  });
+    const job = await transcodingQueue.add({
+      inputPath: req.file.path,
+      outputDir,
+      contentId: id,
+      model: 'content',
+      type: content.type,
+      ownerId: String(req.user._id),
+    });
 
-  res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding started' }));
+    res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding started' }));
+  } catch (err) {
+    removeFile(req.file.path); // do not leave the upload behind when it was refused
+    throw err;
+  }
 });
 
 // ── ADMIN: POST /api/content/admin/:id/thumbnail ──────
 exports.uploadThumbnail = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'Image required');
-  const result = await cloudinary.uploader.upload(req.file.path, { folder: 'thumbnails' });
-  fs.unlinkSync(req.file.path);
-  const content = await Content.findByIdAndUpdate(
-    req.params.id,
-    { thumbnail: result.secure_url },
-    { new: true }
-  );
-  res.json(new ApiResponse(200, { thumbnail: result.secure_url }));
+  try {
+    await loadManageableContent(req.user, req.params.id);
+    const result = await cloudinary.uploader.upload(req.file.path, { folder: 'thumbnails' });
+    await Content.findByIdAndUpdate(req.params.id, { thumbnail: result.secure_url });
+    res.json(new ApiResponse(200, { thumbnail: result.secure_url }));
+  } finally {
+    removeFile(req.file.path);
+  }
 });
 
 // ── ADMIN: PUT /api/content/admin/:id/toggle ──────────
 exports.toggle = asyncHandler(async (req, res) => {
-  const content = await Content.findById(req.params.id);
-  if (!content) throw new ApiError(404, 'Content not found');
+  const content = await loadManageableContent(req.user, req.params.id);
   content.isActive = !content.isActive;
   await content.save();
-  await cDel(`content:detail:${content.slug}`);
+  await cDel(detailKey(content.slug));
   res.json(new ApiResponse(200, { isActive: content.isActive }));
 });
 
@@ -333,8 +371,7 @@ exports.getAnalytics = asyncHandler(async (req, res) => {
 
 // ── Transcode status polling ───────────────────────────
 exports.getTranscodeStatus = asyncHandler(async (req, res) => {
-  const content = await Content.findById(req.params.id).select('transcodeStatus videoFiles');
-  if (!content) throw new ApiError(404, 'Not found');
+  const content = await loadManageableContent(req.user, req.params.id);
   res.json(
     new ApiResponse(200, {
       status: content.transcodeStatus,

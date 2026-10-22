@@ -29,14 +29,20 @@ export default function WatchParty() {
   });
 
   useEffect(() => {
+    const join = () => watchPartySocket.emit('join-party', { partyId: id });
     connectWatchParty();
-    watchPartySocket.emit('join-party', { partyId: id });
+    join();
+    // rooms are lost when the connection drops, so join again after every reconnect
+    watchPartySocket.on('connect', join);
+    watchPartySocket.on('socket-error', ({ message }) => toast.error(message));
     watchPartySocket.on('party-state', (state) => setPartyState(state));
     watchPartySocket.on('sync-update', ({ timestamp, isPlaying }) => {
       setPartyState((s) => ({ ...s, currentTimestamp: timestamp, isPlaying }));
     });
     watchPartySocket.on('party-chat', (msg) => setMessages((m) => [...m.slice(-100), msg]));
     return () => {
+      watchPartySocket.off('connect', join);
+      watchPartySocket.off('socket-error');
       watchPartySocket.off('party-state');
       watchPartySocket.off('sync-update');
       watchPartySocket.off('party-chat');

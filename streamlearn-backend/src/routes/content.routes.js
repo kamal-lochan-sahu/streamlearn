@@ -12,11 +12,11 @@ router.get('/search', optionalAuth, ctrl.search);
 router.get('/continue-watching', authenticate, ctrl.getContinueWatching);
 router.get('/recommendations', authenticate, ctrl.getRecommendations);
 
-// ── Admin routes ──
+// ── Admin / creator routes (creators can only touch their own content, checked in the controller) ──
 router.post('/admin/create', authenticate, isCreator, ctrl.create);
 router.put('/admin/:id/toggle', authenticate, isCreator, ctrl.toggle);
 router.get('/admin/:id/analytics', authenticate, isAdmin, ctrl.getAnalytics);
-router.get('/admin/:id/transcode-status', authenticate, ctrl.getTranscodeStatus);
+router.get('/admin/:id/transcode-status', authenticate, isCreator, ctrl.getTranscodeStatus);
 router.post('/admin/:id/upload', authenticate, isCreator, ctrl.uploadMiddleware, ctrl.uploadVideo);
 router.post(
   '/admin/:id/thumbnail',

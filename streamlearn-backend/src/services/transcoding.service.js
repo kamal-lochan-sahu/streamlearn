@@ -76,20 +76,20 @@ const transcodeToHLS = (inputPath, outputDir, onProgress = () => {}) => {
 };
 
 /**
- * Upload HLS segments to Cloudinary (demo)
- * In production: upload to Bunny.net / S3
+ * Records where the HLS files live, as paths relative to the HLS root (for example
+ * "ep-<id>/720p/index.m3u8"). These are NOT public URLs: playback links are created per request
+ * by utils/hls.utils.js and are only handed out after an access check.
+ * In production this is where an upload to a CDN / object storage would go.
  */
-const uploadHLSToCloudinary = async (outputDir, contentId) => {
+const uploadHLSToCloudinary = async (outputDir) => {
+  const dir = path.basename(outputDir);
   const results = { '480p': null, '720p': null, '1080p': null, master: null };
 
   for (const quality of ['480p', '720p', '1080p']) {
-    const m3u8Path = path.join(outputDir, quality, 'index.m3u8');
-    if (!fs.existsSync(m3u8Path)) continue;
-    // Note: For demo, serve locally. For production use CDN upload here.
-    results[quality] =
-      `${process.env.STREAM_BASE_URL}/uploads/hls/${contentId}/${quality}/index.m3u8`;
+    if (fs.existsSync(path.join(outputDir, quality, 'index.m3u8')))
+      results[quality] = `${dir}/${quality}/index.m3u8`;
   }
-  results.master = `${process.env.STREAM_BASE_URL}/uploads/hls/${contentId}/master.m3u8`;
+  results.master = `${dir}/master.m3u8`;
   return results;
 };
 
