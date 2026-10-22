@@ -83,6 +83,12 @@ contentSchema.index({ slug: 1 });
 contentSchema.index({ type: 1, isActive: 1 });
 contentSchema.index({ genre: 1 });
 contentSchema.index({ tags: 1 });
-contentSchema.index({ title: 'text', description: 'text', tags: 'text' });
+// MongoDB treats a document field named "language" as the text-search language of that document and
+// rejects the insert when it is not a string. Our `language` is a list of spoken languages, so the
+// override field is renamed to one that does not exist.
+contentSchema.index(
+  { title: 'text', description: 'text', tags: 'text' },
+  { language_override: 'textSearchLanguage' }
+);
 
 module.exports = mongoose.model('Content', contentSchema);
