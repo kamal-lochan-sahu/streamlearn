@@ -3,6 +3,7 @@ const Content = require('../models/Content');
 const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { requireObjectId } = require('../utils/validate.utils');
 
 const getUserWatchlist = async (userId, profileIndex) =>
   Watchlist.findOne({ userId, profileIndex }) ||
@@ -26,9 +27,9 @@ exports.get = asyncHandler(async (req, res) => {
 });
 
 exports.add = asyncHandler(async (req, res) => {
-  const { contentId } = req.params;
+  const contentId = requireObjectId(req.params.contentId, 'contentId');
   const profileIndex = req.user.activeProfile || 0;
-  const content = await Content.findById(contentId);
+  const content = await Content.findOne({ _id: contentId, isActive: true }).select('_id');
   if (!content) throw new ApiError(404, 'Content not found');
 
   let wl = await Watchlist.findOne({ userId: req.user._id, profileIndex });
@@ -43,7 +44,7 @@ exports.add = asyncHandler(async (req, res) => {
 });
 
 exports.remove = asyncHandler(async (req, res) => {
-  const { contentId } = req.params;
+  const contentId = requireObjectId(req.params.contentId, 'contentId');
   const profileIndex = req.user.activeProfile || 0;
   await Watchlist.findOneAndUpdate(
     { userId: req.user._id, profileIndex },
@@ -53,7 +54,7 @@ exports.remove = asyncHandler(async (req, res) => {
 });
 
 exports.check = asyncHandler(async (req, res) => {
-  const { contentId } = req.params;
+  const contentId = requireObjectId(req.params.contentId, 'contentId');
   const profileIndex = req.user.activeProfile || 0;
   const wl = await Watchlist.findOne({ userId: req.user._id, profileIndex });
   const inList = wl?.items.some((i) => i.contentId.toString() === contentId) || false;

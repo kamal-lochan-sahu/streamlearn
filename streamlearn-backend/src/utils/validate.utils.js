@@ -71,7 +71,72 @@ const clampInt = (value, fallback, min, max) => {
   return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : fallback;
 };
 
+/** true/false only (also accepts the strings "true"/"false" from forms). Undefined when absent. */
+const optionalBoolean = (value, label) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new ApiError(400, `${label} must be true or false`);
+};
+
+/** Whole number in [min, max] (numbers or numeric strings). Undefined when absent. */
+const optionalInt = (value, label, min, max) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'number' && typeof value !== 'string')
+    throw new ApiError(400, `${label} must be a number`);
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < min || n > max)
+    throw new ApiError(400, `${label} must be a whole number between ${min} and ${max}`);
+  return n;
+};
+
+/** Number (decimals allowed) in [min, max]. Undefined when absent. */
+const optionalNumber = (value, label, min, max) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'number' && typeof value !== 'string')
+    throw new ApiError(400, `${label} must be a number`);
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < min || n > max)
+    throw new ApiError(400, `${label} must be between ${min} and ${max}`);
+  return n;
+};
+
+/** One of the allowed values. Undefined when absent. */
+const optionalEnum = (value, allowed, label) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' || !allowed.includes(value))
+    throw new ApiError(400, `${label} must be one of: ${allowed.join(', ')}`);
+  return value;
+};
+
+/** Array of short strings (genres, languages ...). Undefined when absent. */
+const optionalStringList = (value, label, { maxItems = 20, maxLength = 40 } = {}) => {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) throw new ApiError(400, `${label} must be a list`);
+  if (value.length > maxItems)
+    throw new ApiError(400, `${label}: too many items (max ${maxItems})`);
+  return value.map((item) => {
+    if (typeof item !== 'string' || !item.trim() || item.length > maxLength)
+      throw new ApiError(400, `${label}: every item must be short text`);
+    return item.trim();
+  });
+};
+
+/** Array position from a URL part like "2". Throws 400 for "abc", "-1", "1.5". */
+const parseIndex = (value, label = 'Index') => {
+  if (typeof value !== 'string' || !/^\d{1,3}$/.test(value))
+    throw new ApiError(400, `Invalid ${label}`);
+  return Number(value);
+};
+
 module.exports = {
+  optionalBoolean,
+  optionalInt,
+  optionalNumber,
+  optionalEnum,
+  optionalStringList,
+  parseIndex,
   requireString,
   normalizeEmail,
   requirePassword,

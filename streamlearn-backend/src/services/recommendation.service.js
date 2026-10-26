@@ -1,4 +1,5 @@
 const Content = require('../models/Content');
+const { publishedFilter } = require('./search.service');
 
 /**
  * Simple collaborative filtering — recommend based on genre/watch history
@@ -8,7 +9,7 @@ const getRecommendations = async (user, limit = 20) => {
   const activeProfile = user.profiles?.[user.activeProfile];
   const preferredGenres = activeProfile?.preferences?.genres || [];
 
-  const query = { isActive: true, access: { $in: ['free', 'subscribers'] } };
+  const query = { ...publishedFilter(), access: { $in: ['free', 'subscribers'] } };
   if (preferredGenres.length) query.genre = { $in: preferredGenres };
 
   const content = await Content.find(query)

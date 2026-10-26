@@ -5,6 +5,7 @@ const Subscription = require('../models/Subscription');
 const LiveStream = require('../models/LiveStream');
 const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { clampInt } = require('../utils/validate.utils');
 
 exports.getDashboard = asyncHandler(async (req, res) => {
   const [totalUsers, activeSubscriptions, totalContent, revenueData, newUsersThisMonth] =
@@ -101,8 +102,8 @@ exports.getSubscribers = asyncHandler(async (req, res) => {
 });
 
 exports.getRevenue = asyncHandler(async (req, res) => {
-  const { period = '30' } = req.query;
-  const since = new Date(Date.now() - parseInt(period) * 24 * 60 * 60 * 1000);
+  const period = clampInt(req.query.period, 30, 1, 365);
+  const since = new Date(Date.now() - period * 24 * 60 * 60 * 1000);
   const revenue = await Transaction.aggregate([
     { $match: { status: 'success', createdAt: { $gte: since } } },
     {
@@ -130,9 +131,3 @@ exports.exportData = asyncHandler(async (req, res) => {
   // TODO: generate CSV/PDF export
   res.json(new ApiResponse(200, { message: 'Export queued. You will receive an email.' }));
 });
-
-exports.getAll = exports.getDashboard;
-exports.getOne = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));
-exports.create = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));
-exports.update = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));
-exports.remove = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));

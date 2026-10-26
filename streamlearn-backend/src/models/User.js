@@ -66,6 +66,20 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Secrets must never reach a response, even when a controller forgets to exclude them.
+userSchema.set('toJSON', {
+  transform: (doc, ret) => {
+    delete ret.password;
+    delete ret.refreshToken;
+    delete ret.otp;
+    delete ret.oauthCode;
+    delete ret.resetPasswordToken;
+    delete ret.resetPasswordExpires;
+    delete ret.__v;
+    return ret;
+  },
+});
+
 // Hash password before save
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();

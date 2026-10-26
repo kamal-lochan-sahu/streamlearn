@@ -45,6 +45,11 @@ const image = multer({
   limits: { fileSize: 10 * MB },
   fileFilter: typeFilter({ image: (t) => IMAGE_TYPES.includes(t) }),
 });
+const avatar = multer({
+  storage,
+  limits: { fileSize: 5 * MB },
+  fileFilter: typeFilter({ avatar: (t) => IMAGE_TYPES.includes(t) }),
+});
 const pdf = multer({
   storage,
   limits: { fileSize: 100 * MB },
@@ -70,6 +75,7 @@ const removeFile = (filePath) => {
 module.exports = {
   videoUpload: video.single('video'),
   imageUpload: image.single('image'),
+  avatarUpload: avatar.single('avatar'),
   pdfUpload: pdf.single('pdf'),
   lectureUpload: lecture.fields([
     { name: 'video', maxCount: 1 },

@@ -1,6 +1,6 @@
 # StreamLearn: Project State
 
-Last updated: 2026-10-02
+Last updated: 2026-10-26
 
 ## Goal
 
@@ -10,11 +10,11 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 ## Phases
 
 - [x] Phase 0: cleanup, tooling (lint, CI, Docker, tests setup)
-- [ ] Phase 1: security and payments (P0 list below)
+- [x] Phase 1: security and payments (P0 list below)
   - [x] 1a: payments, coupons, subscriptions (P0 #1, #2, #5)
   - [x] 1b: auth hardening (P0 #6, #10, Google login, trust proxy)
   - [x] 1c: access control (P0 #3, #9: streams, uploads, IDOR, sockets)
-  - [ ] 1d: mass assignment and query injection (P0 #4, #11)
+  - [x] 1d: mass assignment and query injection (P0 #4, #11)
 - [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
 - [ ] Phase 3: video pipeline (object storage, signed access, ffprobe)
 - [ ] Phase 4: automated tests (auth, payments, access control)
@@ -53,6 +53,12 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - Sockets: every namespace requires a valid access token (user is loaded from the DB), `join-stream`/`join-party` check audience/membership, messages are length- and rate-limited, only the host controls watch-party playback, one poll vote per person (atomic).
 - Live streams: viewers never receive `streamKey`, `rtmpUrl`, `hlsUrl` or `recordingUrl`; they get the playback link from `/live/:id/stream-url` after the audience check. Known gap: the live HLS server itself (nginx-rtmp or similar) is still outside this app, so its URL is not signed. Protect it in Phase 5 (secure link module or move to a managed live service).
 - Content text index uses `language_override: 'textSearchLanguage'` because `Content.language` is an array (real MongoDB refused every insert otherwise). An existing database that already has the old `title_text_description_text_tags_text` index must drop it once (`db.contents.dropIndex('title_text_description_text_tags_text')`) before the app can rebuild it; fresh databases need nothing.
+- Query input (1d): `utils/query.utils.js` parses browse/search/user-list input (text, enum, list, int, page/limit, sort whitelist) and answers 400 for objects, unknown enum values and too long text; page/limit are clamped (limit max 50, admin lists 100). A global `rejectOperatorKeys` middleware (after the body parsers) answers 400 to any query/body key starting with `$` or named `__proto__`; raw webhook bodies are skipped. Search text is escaped before use in a RegExp (suggestions, admin user search).
+- Listings (browse, search, suggestions, featured, trending, new releases, related, recommendations) only show published content (`publishedFilter` in `search.service.js`, same rule as `isPublished` in `access.service.js`), and list items use `LIST_FIELDS` (never `videoFiles`, `ownerId`). The browse cache key is built from the cleaned params only.
+- Mass assignment (1d): plan, review, settings, profile and continue-watching handlers read only whitelisted, validated fields (`optional*` helpers in `utils/validate.utils.js`). Plans reject negative or non-numeric prices (they drive payments) and cannot be deleted while they have active subscribers. Reviews recompute the content rating on create/update/delete; "helpful" is an atomic toggle.
+- Settings are platform-wide (one document, first admin who saves creates it). Admins read everything; everyone else only `platform` and `features`. Section updates use dot paths, so a branding save no longer wipes other branding fields.
+- Secrets: `User.toJSON` strips `password`, `refreshToken`, `otp`, `oauthCode`, `resetPasswordToken`, `resetPasswordExpires`; profile and admin user list also exclude them in the query.
+- Error handler: Mongoose `CastError` and `ValidationError` become 400, duplicate key 409, bad JSON 400, and unexpected 500s show a generic message in production.
 - Mongo portability: positional `$` updates, `$pull` on subdocuments and `$ne` on nested arrays are avoided (FerretDB, used in sandbox tests, evaluates them wrongly). Use `$nor`, load-modify-save with version retry, etc.
 - `TRUST_PROXY` (hops, default 1 in production) makes rate limits use the real client IP behind Render/Vercel.
 
@@ -74,3 +80,4 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
   subscriptions and coupons. Admin transactions page now uses `/payments/admin/all`.
 - 2026-10-04, Phase 1b: auth rewrite (hashed rotating refresh tokens, Origin check on refresh/logout/exchange, header-only access tokens, OTP attempt limit and lockout, no account discovery on OTP/forgot, owner only via script, Google login via one-time code with state, trust proxy, env validation at startup, separate rate limiters). Frontend: refresh interceptor no longer loops (single refresh shared by parallel requests, auth endpoints excluded, no redirect when already on /login), `/auth/callback` page, `API_URL` export, Register password minimum 8.
 - 2026-10-23, Phase 1c: private signed video links (`/hls`), access service used by stream/assignment/doubt/progress/live/watch-party, creator ownership checks on every content mutation, mass-assignment guards on content/episode/lecture/live updates, IDOR fixes (notifications, assignments, doubts, live start/end/update/delete), upload hardening (creators only, type filter, random filenames, temp files removed on refusal; fixed `rule.test is not a function` crash in the filter), socket auth per namespace, real HTTP 201 on create endpoints. Removed unused `subscription.middleware.js` and `streaming.service.js`.
+- 2026-10-26, Phase 1d: query injection and mass assignment (see Decisions). Known leftovers for Phase 2: `analytics/export` is a stub that claims an email is queued; the admin Users page calls `/users/profile` instead of the admin list; watchlist `get` returns empty objects for removed content; there is no review moderation by staff. Phase 5: `cache.delPattern` uses Redis `KEYS` (blocking).

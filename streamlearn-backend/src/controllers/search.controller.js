@@ -2,28 +2,12 @@ const { search, getSuggestions } = require('../services/search.service');
 const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
 
+// GET /api/search?q=&type=&genre=&language=&year=&access=&sort=&page=&limit=
 exports.search = asyncHandler(async (req, res) => {
-  const { q, type, genre, language, year, page = 1, limit = 20 } = req.query;
-  const result = await search({
-    q,
-    type,
-    genre,
-    language,
-    year,
-    page: parseInt(page),
-    limit: parseInt(limit),
-  });
-  res.json(new ApiResponse(200, result));
+  res.json(new ApiResponse(200, await search(req.query)));
 });
 
+// GET /api/search/suggestions?q=
 exports.suggestions = asyncHandler(async (req, res) => {
-  const { q } = req.query;
-  const results = await getSuggestions(q);
-  res.json(new ApiResponse(200, results));
+  res.json(new ApiResponse(200, await getSuggestions(req.query.q)));
 });
-
-exports.getAll = exports.search;
-exports.getOne = exports.suggestions;
-exports.create = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));
-exports.update = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));
-exports.remove = asyncHandler(async (req, res) => res.json(new ApiResponse(200, {})));

@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const passport = require('passport');
 const { errorHandler } = require('./middleware/error.middleware');
 const { globalLimiter } = require('./middleware/rateLimit.middleware');
+const { rejectOperatorKeys } = require('./middleware/sanitize.middleware');
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/payments/stripe/webhook', express.raw({ type: '*/*', limit: '1mb' 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+app.use(rejectOperatorKeys);
 app.use(compression());
 
 // ── Logging (dev only)

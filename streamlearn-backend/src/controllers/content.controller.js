@@ -20,6 +20,14 @@ const {
 const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
 const { videoUpload, imageUpload, removeFile } = require('../utils/upload.utils');
 const { requireObjectId, omitKeys } = require('../utils/validate.utils');
+const {
+  search: searchCatalog,
+  parseCatalogInput,
+  buildCatalogQuery,
+  catalogCacheKey,
+  publishedFilter,
+  LIST_FIELDS,
+} = require('../services/search.service');
 
 exports.uploadMiddleware = videoUpload;
 exports.imageUploadMiddleware = imageUpload;
@@ -50,39 +58,17 @@ const makeSlug = async (title, id = null) => {
 
 // ── GET /api/content  (browse + filters) ─────────────
 exports.getAll = asyncHandler(async (req, res) => {
-  const {
-    type,
-    genre,
-    language,
-    year,
-    access,
-    page = 1,
-    limit = 20,
-    sort = '-createdAt',
-  } = req.query;
-  const query = { isActive: true };
-  if (type) query.type = type;
-  if (genre) query.genre = { $in: Array.isArray(genre) ? genre : [genre] };
-  if (language) query.language = { $in: Array.isArray(language) ? language : [language] };
-  if (year) query.releaseYear = parseInt(year);
-  if (access) query.access = access;
-
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-  const cacheKey = `content:browse:${JSON.stringify(req.query)}`;
+  const params = parseCatalogInput({ ...req.query, q: undefined });
+  const cacheKey = catalogCacheKey('content:browse:v2', params);
   const cached = await cGet(cacheKey);
   if (cached) return res.json(new ApiResponse(200, cached));
 
+  const query = buildCatalogQuery(params);
   const [items, total] = await Promise.all([
-    Content.find(query)
-      .sort(sort)
-      .skip(skip)
-      .limit(parseInt(limit))
-      .select(
-        'title slug thumbnail banner type genre language releaseYear duration rating viewCount access isFeatured'
-      ),
+    Content.find(query).sort(params.sort).skip(params.skip).limit(params.limit).select(LIST_FIELDS),
     Content.countDocuments(query),
   ]);
-  const data = { items, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) };
+  const data = { items, total, page: params.page, pages: Math.ceil(total / params.limit) };
   await cSet(cacheKey, data, 300);
   res.json(new ApiResponse(200, data));
 });
@@ -91,7 +77,7 @@ exports.getAll = asyncHandler(async (req, res) => {
 exports.getFeatured = asyncHandler(async (req, res) => {
   const cached = await cGet('content:featured');
   if (cached) return res.json(new ApiResponse(200, cached));
-  const items = await Content.find({ isActive: true, isFeatured: true })
+  const items = await Content.find({ ...publishedFilter(), isFeatured: true })
     .sort('-createdAt')
     .limit(10)
     .select(
@@ -105,7 +91,7 @@ exports.getFeatured = asyncHandler(async (req, res) => {
 exports.getTrending = asyncHandler(async (req, res) => {
   const cached = await cGet('content:trending');
   if (cached) return res.json(new ApiResponse(200, cached));
-  const items = await Content.find({ isActive: true })
+  const items = await Content.find(publishedFilter())
     .sort('-viewCount -rating.average')
     .limit(20)
     .select('title slug thumbnail type genre releaseYear duration rating viewCount');
@@ -115,7 +101,7 @@ exports.getTrending = asyncHandler(async (req, res) => {
 
 // ── GET /api/content/new-releases ────────────────────
 exports.getNewReleases = asyncHandler(async (req, res) => {
-  const items = await Content.find({ isActive: true })
+  const items = await Content.find(publishedFilter())
     .sort('-createdAt')
     .limit(20)
     .select('title slug thumbnail type genre releaseYear duration rating');
@@ -217,7 +203,7 @@ exports.getRelated = asyncHandler(async (req, res) => {
   );
   if (!content) throw new ApiError(404, 'Content not found');
   const items = await Content.find({
-    isActive: true,
+    ...publishedFilter(),
     _id: { $ne: content._id },
     $or: [{ type: content.type }, { genre: { $in: content.genre } }],
   })
@@ -228,10 +214,9 @@ exports.getRelated = asyncHandler(async (req, res) => {
 
 // ── POST /api/content/search ──────────────────────────
 exports.search = asyncHandler(async (req, res) => {
-  const { q, type, genre, language, year, page = 1, limit = 20 } = req.body;
-  const { search } = require('../services/search.service');
-  const result = await search({ q, type, genre, language, year, page, limit });
-  res.json(new ApiResponse(200, result));
+  // GET /content/search uses the query string, POST /content/search the JSON body
+  const input = req.method === 'GET' ? req.query : req.body;
+  res.json(new ApiResponse(200, await searchCatalog(input)));
 });
 
 // ── GET /api/content/:slug/episodes ──────────────────
