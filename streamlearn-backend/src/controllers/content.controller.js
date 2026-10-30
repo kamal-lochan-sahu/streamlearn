@@ -14,12 +14,15 @@ const slugify = require('slugify');
 const {
   checkContentAccess,
   assertAllowed,
+  canManageContent,
+  isPublished,
   loadManageableContent,
   CONTENT_ACCESS_FIELDS,
 } = require('../services/access.service');
+const { contentResumeAt, resumeInfo } = require('../services/resume.service');
 const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
 const { videoUpload, imageUpload, removeFile } = require('../utils/upload.utils');
-const { requireObjectId, omitKeys } = require('../utils/validate.utils');
+const { requireObjectId, isObjectId, omitKeys } = require('../utils/validate.utils');
 const {
   search: searchCatalog,
   parseCatalogInput,
@@ -47,6 +50,11 @@ const SERVER_MANAGED = [
 ];
 
 const detailKey = (slug) => `content:detail:v2:${slug}`;
+
+// The player and course pages used to hand over an id where the API wanted a slug (and the other
+// way round). Every title endpoint under /:slug now accepts BOTH, so old links and bookmarks work.
+const slugOrIdFilter = (param) =>
+  isObjectId(param) ? { $or: [{ _id: param }, { slug: param }] } : { slug: param };
 
 // ── helpers ──────────────────────────────────────────
 const makeSlug = async (title, id = null) => {
@@ -109,21 +117,32 @@ exports.getNewReleases = asyncHandler(async (req, res) => {
 });
 
 // ── GET /api/content/continue-watching ───────────────
+// One query for all titles (it used to be one query per entry) and only titles that can
+// still be watched. Newest first, with the episode/lecture to continue.
 exports.getContinueWatching = asyncHandler(async (req, res) => {
   const user = req.user;
   const profile = user.profiles[user.activeProfile];
-  if (!profile?.continueWatching?.length) return res.json(new ApiResponse(200, []));
+  const entries = [...(profile?.continueWatching || [])]
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .slice(0, 20);
+  if (!entries.length) return res.json(new ApiResponse(200, []));
 
-  const populated = await Promise.all(
-    profile.continueWatching.slice(0, 20).map(async (cw) => {
-      const content = await Content.findById(cw.contentId).select(
-        'title slug thumbnail type duration'
-      );
-      if (!content) return null;
-      return { ...content.toObject(), timestamp: cw.timestamp, updatedAt: cw.updatedAt };
-    })
-  );
-  res.json(new ApiResponse(200, populated.filter(Boolean)));
+  const contents = await Content.find({
+    _id: { $in: entries.map((e) => e.contentId) },
+    ...publishedFilter(),
+  }).select('title slug thumbnail type duration');
+  const byId = new Map(contents.map((c) => [String(c._id), c]));
+
+  const items = entries
+    .filter((e) => byId.has(String(e.contentId)))
+    .map((e) => ({
+      ...byId.get(String(e.contentId)).toObject(),
+      timestamp: e.timestamp,
+      episodeId: e.episodeId || null,
+      lectureId: e.lectureId || null,
+      updatedAt: e.updatedAt,
+    }));
+  res.json(new ApiResponse(200, items));
 });
 
 // ── GET /api/content/recommendations ─────────────────
@@ -133,25 +152,35 @@ exports.getRecommendations = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, items));
 });
 
-// ── GET /api/content/:slug ────────────────────────────
+// ── GET /api/content/:slug (slug or id) ───────────────
+// Published titles are cached and public. A draft, scheduled or expired title is visible only
+// to people who manage it (so an admin or creator can preview before publishing).
 exports.getBySlug = asyncHandler(async (req, res) => {
-  const { slug } = req.params;
-  const cacheKey = detailKey(slug);
-  const cached = await cGet(cacheKey);
-  if (cached) return res.json(new ApiResponse(200, cached));
+  const param = req.params.slug;
+  if (!isObjectId(param)) {
+    const cached = await cGet(detailKey(param));
+    if (cached) return res.json(new ApiResponse(200, cached));
+  }
 
   // videoFiles never leave the server through this endpoint; playback goes through /stream
-  const content = await Content.findOne({ slug, isActive: true })
+  const content = await Content.findOne(slugOrIdFilter(param))
     .select('-videoFiles')
     .populate('instructor', 'name avatar');
   if (!content) throw new ApiError(404, 'Content not found');
 
-  // Increment view count
-  Content.findByIdAndUpdate(content._id, { $inc: { viewCount: 1 } }).exec();
+  const published = isPublished(content);
+  if (!published && !canManageContent(req.user, content))
+    throw new ApiError(404, 'Content not found');
 
-  let extra = {};
+  // Increment view count
+  if (published) Content.findByIdAndUpdate(content._id, { $inc: { viewCount: 1 } }).exec();
+
+  const extra = {};
   if (content.type === 'series') {
-    extra.episodes = await Episode.find({ contentId: content._id, isActive: true })
+    extra.episodes = await Episode.find({
+      contentId: content._id,
+      ...(published && { isActive: true }),
+    })
       .sort('seasonNumber episodeNumber')
       .select('-videoFiles');
   }
@@ -161,22 +190,35 @@ exports.getBySlug = asyncHandler(async (req, res) => {
       .populate({
         path: 'lectures',
         select: '-videoFiles -notes -transcript',
+        // students never see lectures that are still drafts; managers previewing a draft course do
+        ...(published && { match: { isActive: true } }),
         options: { sort: { order: 1 } },
       });
   }
 
   const data = { ...content.toObject(), ...extra };
-  await cSet(cacheKey, data, 300);
+  if (published) await cSet(detailKey(content.slug), data, 300);
   res.json(new ApiResponse(200, data));
+});
+
+// ── GET /api/content/:slug/resume ─────────────────────
+// Where this user left off (episode / lecture + seconds), so "Resume" can start the right video.
+exports.getResume = asyncHandler(async (req, res) => {
+  const content = await Content.findOne(slugOrIdFilter(req.params.slug)).select(
+    `type ${CONTENT_ACCESS_FIELDS}`
+  );
+  if (!content) throw new ApiError(404, 'Content not found');
+  if (!isPublished(content) && !canManageContent(req.user, content))
+    throw new ApiError(404, 'Content not found');
+  res.json(new ApiResponse(200, await resumeInfo(req.user, content)));
 });
 
 // ── GET /api/content/:slug/stream ────────────────────
 // The access check (free / subscription / purchase / owner) happens here, before a playback
 // link is created. The link itself is a short-lived signed token (see utils/hls.utils.js).
 exports.getStreamUrl = asyncHandler(async (req, res) => {
-  const { slug } = req.params;
   const { quality = 'master' } = req.query;
-  const content = await Content.findOne({ slug }).select(
+  const content = await Content.findOne(slugOrIdFilter(req.params.slug)).select(
     `videoFiles type thumbnail ${CONTENT_ACCESS_FIELDS}`
   );
   if (!content) throw new ApiError(404, 'Content not found');
@@ -191,6 +233,7 @@ exports.getStreamUrl = asyncHandler(async (req, res) => {
       quality: wanted,
       contentId: content._id,
       thumbnail: content.thumbnail,
+      resumeAt: contentResumeAt(req.user, content._id),
     })
   );
 });
@@ -221,8 +264,11 @@ exports.search = asyncHandler(async (req, res) => {
 
 // ── GET /api/content/:slug/episodes ──────────────────
 exports.getEpisodes = asyncHandler(async (req, res) => {
-  const content = await Content.findOne({ slug: req.params.slug, isActive: true });
-  if (!content) throw new ApiError(404, 'Content not found');
+  const content = await Content.findOne(slugOrIdFilter(req.params.slug)).select(
+    'ownerId isActive expiryDate schedulePublish'
+  );
+  if (!content || (!isPublished(content) && !canManageContent(req.user, content)))
+    throw new ApiError(404, 'Content not found');
   const episodes = await Episode.find({ contentId: content._id, isActive: true })
     .sort('seasonNumber episodeNumber')
     .select('-videoFiles');

@@ -13,6 +13,7 @@ const {
   loadManageableContent,
   CONTENT_ACCESS_FIELDS,
 } = require('../services/access.service');
+const { lectureResumeAt } = require('../services/resume.service');
 const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
 const { lectureUpload, removeFile } = require('../utils/upload.utils');
 const { requireObjectId, requireHttpUrl, omitKeys } = require('../utils/validate.utils');
@@ -69,6 +70,7 @@ exports.getStreamUrl = asyncHandler(async (req, res) => {
     new ApiResponse(200, {
       url,
       contentId: content._id,
+      resumeAt: await lectureResumeAt(req.user, content._id, lecture._id),
       // notes only for people with full access, not for free-preview visitors
       notes: access.full ? lecture.notes || null : null,
     })

@@ -14,6 +14,7 @@ router.put('/profiles/:index', ctrl.updateProfileByIndex);
 router.delete('/profiles/:index', ctrl.deleteProfile);
 router.get('/watch-history', ctrl.getWatchHistory);
 router.put('/continue-watching', ctrl.saveContinueWatching);
+router.delete('/continue-watching/:contentId', ctrl.removeContinueWatching);
 router.get('/admin/all', isAdmin, ctrl.getAllUsers);
 
 module.exports = router;

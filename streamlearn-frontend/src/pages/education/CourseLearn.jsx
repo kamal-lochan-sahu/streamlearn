@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,33 +11,76 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import VideoPlayer from '../../components/player/VideoPlayer';
+import useProgressSaver from '../../hooks/useProgressSaver';
 import Loader from '../../components/common/Loader';
 import api from '../../services/api';
 import { formatDuration } from '../../utils/formatters';
 import toast from 'react-hot-toast';
 
+const BLOCKED_TEXT = {
+  401: 'Please sign in to watch this lecture.',
+  403: 'Subscription or purchase required to watch this lecture.',
+  404: 'Video not available yet.',
+};
+
+// The player lives in its own component, keyed by lecture: every lecture starts with fresh
+// saving state, and the previous lecture's last position is saved against the previous lecture.
+function LecturePlayer({ courseId, lectureId, streamData, onEnded }) {
+  const { onProgress, onPause, finish } = useProgressSaver((seconds) =>
+    api.put(
+      '/progress/timestamp',
+      { contentId: courseId, lectureId, timestamp: seconds },
+      { silent: true }
+    )
+  );
+  return (
+    <VideoPlayer
+      src={streamData.url}
+      startTime={streamData.resumeAt || 0}
+      onProgress={onProgress}
+      onPause={onPause}
+      onEnded={() => {
+        finish();
+        onEnded();
+      }}
+      options={{ autoPlay: true }}
+    />
+  );
+}
+
+// /learn/:courseId/:lectureId?   courseId is the course slug (an id works too)
 export default function CourseLearn() {
-  const { courseId, lectureId } = useParams();
+  const { courseId: courseRef, lectureId } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState('overview');
   const [doubt, setDoubt] = useState('');
   const [expandSection, setExpandSection] = useState(0);
-  const saveTimer = useRef(null);
 
   const { data: course, isLoading } = useQuery({
-    queryKey: ['course', courseId],
-    queryFn: () => api.get(`/content/${courseId}`).then((r) => r.data.data),
+    queryKey: ['course', courseRef],
+    queryFn: () => api.get(`/content/${courseRef}`).then((r) => r.data.data),
   });
+  const courseId = course?._id; // the progress, doubt and certificate APIs work with the id
   const { data: progress } = useQuery({
     queryKey: ['progress', courseId],
     queryFn: () => api.get(`/progress/content/${courseId}`).then((r) => r.data.data),
+    enabled: !!courseId,
   });
   const { data: streamData } = useQuery({
     queryKey: ['lec-stream', lectureId],
-    queryFn: () =>
-      lectureId ? api.get(`/lectures/${lectureId}/stream`).then((r) => r.data.data) : null,
     enabled: !!lectureId,
+    staleTime: 0, // signed links expire and the resume position changes
+    gcTime: 0,
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get(`/lectures/${lectureId}/stream`, { silent: true });
+        return res.data.data;
+      } catch (err) {
+        return { blocked: err.response?.status || 404, message: err.response?.data?.message };
+      }
+    },
   });
   const { data: doubts = [] } = useQuery({
     queryKey: ['doubts', lectureId],
@@ -49,14 +92,14 @@ export default function CourseLearn() {
   const markComplete = useMutation({
     mutationFn: () => api.put(`/progress/lecture/${lectureId}`, { contentId: courseId }),
     onSuccess: () => {
-      qc.invalidateQueries(['progress', courseId]);
+      qc.invalidateQueries({ queryKey: ['progress', courseId] });
       toast.success('Lecture completed ✓');
     },
   });
   const postDoubt = useMutation({
     mutationFn: () => api.post('/doubts', { contentId: courseId, lectureId, question: doubt }),
     onSuccess: () => {
-      qc.invalidateQueries(['doubts', lectureId]);
+      qc.invalidateQueries({ queryKey: ['doubts', lectureId] });
       setDoubt('');
       toast.success('Doubt posted');
     },
@@ -69,7 +112,26 @@ export default function CourseLearn() {
   const nextLec = allLectures[currentIdx + 1];
   const isCompleted = progress?.completedLectures?.includes(lectureId);
 
+  // /learn/:course without a lecture: continue where the student stopped, else the first lecture
+  const firstLectureId = allLectures[0]?._id;
+  const resumeLectureId = allLectures.some((l) => l._id === progress?.lastLecture)
+    ? progress.lastLecture
+    : firstLectureId;
+  useEffect(() => {
+    if (!lectureId && course && progress !== undefined && resumeLectureId)
+      navigate(`/learn/${courseRef}/${resumeLectureId}`, { replace: true });
+  }, [lectureId, course, progress, resumeLectureId, courseRef, navigate]);
+
   if (isLoading) return <Loader fullScreen />;
+  if (!course)
+    return (
+      <div className="min-h-screen bg-bg-primary flex flex-col items-center justify-center gap-3">
+        <p className="text-text-secondary">Course not found.</p>
+        <button onClick={() => navigate('/')} className="text-brand hover:underline text-sm">
+          Go home
+        </button>
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-bg-primary flex flex-col">
@@ -103,31 +165,34 @@ export default function CourseLearn() {
         <div className="flex-1 overflow-y-auto">
           <div className="bg-black">
             {streamData?.url ? (
-              <VideoPlayer
-                src={streamData.url}
-                onProgress={({ currentTime }) => {
-                  if (currentTime % 15 < 1) {
-                    clearTimeout(saveTimer.current);
-                    saveTimer.current = setTimeout(
-                      () =>
-                        api.put('/progress/timestamp', {
-                          contentId: courseId,
-                          lectureId,
-                          timestamp: Math.floor(currentTime),
-                        }),
-                      1000
-                    );
-                  }
+              <LecturePlayer
+                key={lectureId}
+                courseId={courseId}
+                lectureId={lectureId}
+                streamData={streamData}
+                onEnded={() => {
+                  if (!isCompleted) markComplete.mutate();
+                  if (nextLec) navigate(`/learn/${courseRef}/${nextLec._id}`);
                 }}
-                onEnded={() => markComplete.mutate()}
-                options={{ autoPlay: true }}
               />
             ) : (
-              <div className="aspect-video flex flex-col items-center justify-center gap-3 text-text-secondary">
+              <div className="aspect-video flex flex-col items-center justify-center gap-3 text-text-secondary px-4 text-center">
                 <BookOpen size={40} />
                 <p className="text-sm">
-                  {lectureId ? 'Video not available yet' : 'Select a lecture'}
+                  {!lectureId
+                    ? 'Select a lecture'
+                    : streamData?.blocked
+                      ? streamData.message || BLOCKED_TEXT[streamData.blocked] || BLOCKED_TEXT[404]
+                      : 'Loading...'}
                 </p>
+                {streamData?.blocked === 403 && (
+                  <button
+                    onClick={() => navigate(`/watch/${course.slug}`)}
+                    className="text-brand hover:underline text-sm"
+                  >
+                    See how to get access
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -173,7 +238,7 @@ export default function CourseLearn() {
                 <div className="flex gap-3">
                   {prevLec && (
                     <button
-                      onClick={() => navigate(`/learn/${courseId}/${prevLec._id}`)}
+                      onClick={() => navigate(`/learn/${courseRef}/${prevLec._id}`)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-bg-surface border border-border rounded-lg text-sm hover:border-white transition-colors"
                     >
                       <ChevronLeft size={15} /> Previous
@@ -181,7 +246,7 @@ export default function CourseLearn() {
                   )}
                   {nextLec && (
                     <button
-                      onClick={() => navigate(`/learn/${courseId}/${nextLec._id}`)}
+                      onClick={() => navigate(`/learn/${courseRef}/${nextLec._id}`)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
                     >
                       Next <ChevronRight size={15} />
@@ -270,7 +335,7 @@ export default function CourseLearn() {
                   return (
                     <button
                       key={lec._id}
-                      onClick={() => navigate(`/learn/${courseId}/${lec._id}`)}
+                      onClick={() => navigate(`/learn/${courseRef}/${lec._id}`)}
                       className={`w-full flex items-center gap-3 px-4 py-2.5 text-left border-t border-border/50 transition-colors ${active ? 'bg-brand/10' : 'hover:bg-bg-elevated'}`}
                     >
                       {done ? (

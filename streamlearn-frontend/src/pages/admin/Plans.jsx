@@ -34,7 +34,7 @@ export default function AdminPlans() {
   const createPlan = useMutation({
     mutationFn: (d) => api.post('/plans/admin/create', d),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-plans']);
+      qc.invalidateQueries({ queryKey: ['admin-plans'] });
       setShowModal(false);
       setForm(DEF);
       toast.success('Plan created');
@@ -43,7 +43,7 @@ export default function AdminPlans() {
   const deletePlan = useMutation({
     mutationFn: (id) => api.delete(`/plans/admin/${id}`),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-plans']);
+      qc.invalidateQueries({ queryKey: ['admin-plans'] });
       toast.success('Deleted');
     },
   });

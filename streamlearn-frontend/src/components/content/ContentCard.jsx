@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Plus, ChevronDown } from 'lucide-react';
 import { formatDuration } from '../../utils/formatters';
+import { playPath } from '../../utils/navigation';
 
 export default function ContentCard({ content, size = 'md' }) {
   const navigate = useNavigate();
@@ -71,7 +72,7 @@ export default function ContentCard({ content, size = 'md' }) {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                navigate(`/player/${content._id}`);
+                navigate(playPath(content));
               }}
               className="w-8 h-8 rounded-full bg-white flex items-center justify-center hover:bg-white/90"
             >

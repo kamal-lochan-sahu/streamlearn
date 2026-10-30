@@ -34,6 +34,7 @@ router.get('/', optionalAuth, ctrl.getAll);
 // ── Dynamic :slug routes (LAST — order matters) ──
 router.get('/:slug/episodes', optionalAuth, ctrl.getEpisodes);
 router.get('/:slug/stream', authenticate, ctrl.getStreamUrl);
+router.get('/:slug/resume', authenticate, ctrl.getResume);
 router.get('/:id/related', optionalAuth, ctrl.getRelated);
 router.get('/:slug', optionalAuth, ctrl.getBySlug);
 

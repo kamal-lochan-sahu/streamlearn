@@ -1,6 +1,6 @@
 # StreamLearn: Project State
 
-Last updated: 2026-10-26
+Last updated: 2026-10-30
 
 ## Goal
 
@@ -16,6 +16,9 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
   - [x] 1c: access control (P0 #3, #9: streams, uploads, IDOR, sockets)
   - [x] 1d: mass assignment and query injection (P0 #4, #11)
 - [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
+  - [x] 2a: playback and viewer flows (movie play, course learn, resume, continue watching, watchlist)
+  - [ ] 2b: admin CRUD (content list with drafts, Users page + ban/role, review moderation, CSV export)
+  - [ ] 2c: auth screens (forgot/reset password, OTP verify, change password, profile picker)
 - [ ] Phase 3: video pipeline (object storage, signed access, ffprobe)
 - [ ] Phase 4: automated tests (auth, payments, access control)
 - [ ] Phase 5: deployment and monitoring
@@ -61,6 +64,12 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - Error handler: Mongoose `CastError` and `ValidationError` become 400, duplicate key 409, bad JSON 400, and unexpected 500s show a generic message in production.
 - Mongo portability: positional `$` updates, `$pull` on subdocuments and `$ne` on nested arrays are avoided (FerretDB, used in sandbox tests, evaluates them wrongly). Use `$nor`, load-modify-save with version retry, etc.
 - `TRUST_PROXY` (hops, default 1 in production) makes rate limits use the real client IP behind Render/Vercel.
+- Title endpoints under `/content/:slug` (detail, stream, resume, episodes) accept the slug OR the id. Frontend links always use the slug (`/player/:slug`, `/learn/:slug/:lectureId`); only episodes (`/player/:episodeId?type=episode`) and lectures use ids. Detail of a draft, scheduled or expired title answers 404 except for staff and the owning creator (preview). Students never see draft lectures or episodes.
+- Resume: `resumeAt` (seconds) comes back in the stream response itself (movies/episodes from the active profile's continue-watching entry, lectures from `CourseProgress.lastLecture/lastTimestamp`), so the player starts at the right place without a second request. `GET /content/:slug/resume` tells the detail page which episode or lecture to continue. An episode stream also returns `nextEpisodeId` (autoplay). Finished titles are removed with `DELETE /users/continue-watching/:contentId`.
+- Continue watching: one entry per title and profile (a series keeps its latest episode), sorted newest first, max 50, ids must belong together (episode/lecture of that content). The list shows only published titles and returns `episodeId` / `lectureId`.
+- Progress saving in the browser: `hooks/useProgressSaver` (every 10s, on pause, on leaving). Background requests pass `{ silent: true }` so the global error toast stays quiet.
+- Watchlist: one document per profile (unique index on userId + profileIndex), adds are atomic, removed/unpublished titles are skipped in the list, max 500 items. Newly added titles can only be published ones.
+- React Query v5: always `invalidateQueries({ queryKey: [...] })` (the array form silently invalidated everything).
 
 ## Working agreement
 
@@ -81,3 +90,4 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - 2026-10-04, Phase 1b: auth rewrite (hashed rotating refresh tokens, Origin check on refresh/logout/exchange, header-only access tokens, OTP attempt limit and lockout, no account discovery on OTP/forgot, owner only via script, Google login via one-time code with state, trust proxy, env validation at startup, separate rate limiters). Frontend: refresh interceptor no longer loops (single refresh shared by parallel requests, auth endpoints excluded, no redirect when already on /login), `/auth/callback` page, `API_URL` export, Register password minimum 8.
 - 2026-10-23, Phase 1c: private signed video links (`/hls`), access service used by stream/assignment/doubt/progress/live/watch-party, creator ownership checks on every content mutation, mass-assignment guards on content/episode/lecture/live updates, IDOR fixes (notifications, assignments, doubts, live start/end/update/delete), upload hardening (creators only, type filter, random filenames, temp files removed on refusal; fixed `rule.test is not a function` crash in the filter), socket auth per namespace, real HTTP 201 on create endpoints. Removed unused `subscription.middleware.js` and `streaming.service.js`.
 - 2026-10-26, Phase 1d: query injection and mass assignment (see Decisions). Known leftovers for Phase 2: `analytics/export` is a stub that claims an email is queued; the admin Users page calls `/users/profile` instead of the admin list; watchlist `get` returns empty objects for removed content; there is no review moderation by staff. Phase 5: `cache.delPattern` uses Redis `KEYS` (blocking).
+- 2026-10-30, Phase 2a: playback and viewer flows. Movie play (id vs slug) and course learn fixed by accepting both on the API and linking by slug; resume position for movies, episodes and lectures; next-episode autoplay; continue-watching saved with the right ids (episodes used to be saved as a title and vanished) and listed with one query; progress saving that really runs while playing (the old 5s timer was reset on every time update); player retries short HLS errors and seeks reliably; drafts previewable by their owner; watchlist `get` no longer returns empty objects; Play on cards/hero opens the detail page for series and courses. Known gaps left for later: the "My Notes" box on the player page is not saved anywhere (needs a model, Phase 6); view count increments on every uncached detail load instead of on play.

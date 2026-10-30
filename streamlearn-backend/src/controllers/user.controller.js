@@ -1,5 +1,7 @@
 const User = require('../models/User');
 const Content = require('../models/Content');
+const Episode = require('../models/Episode');
+const Lecture = require('../models/Lecture');
 const Notification = require('../models/Notification');
 const cloudinary = require('../config/cloudinary');
 const { ApiError } = require('../utils/ApiError');
@@ -137,27 +139,53 @@ exports.getWatchHistory = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, history));
 });
 
+const MAX_CONTINUE_WATCHING = 50;
+
+// Saves "where I stopped" for the active profile. One entry per title (a series keeps its latest
+// episode), newest first. The ids must really belong together, so nobody can fill the list with junk.
 exports.saveContinueWatching = asyncHandler(async (req, res) => {
   const body = req.body || {};
   const contentId = requireObjectId(body.contentId, 'contentId');
+  const episodeId = body.episodeId ? requireObjectId(body.episodeId, 'episodeId') : undefined;
+  const lectureId = body.lectureId ? requireObjectId(body.lectureId, 'lectureId') : undefined;
+  const timestamp = optionalNumber(body.timestamp, 'timestamp', 0, 60 * 60 * 24 * 7) ?? 0;
+
+  if (!(await Content.exists({ _id: contentId }))) throw new ApiError(404, 'Content not found');
+  if (episodeId && !(await Episode.exists({ _id: episodeId, contentId })))
+    throw new ApiError(404, 'Episode not found in this series');
+  if (lectureId && !(await Lecture.exists({ _id: lectureId, contentId })))
+    throw new ApiError(404, 'Lecture not found in this course');
+
   const entry = {
     contentId,
-    episodeId: body.episodeId ? requireObjectId(body.episodeId, 'episodeId') : undefined,
-    lectureId: body.lectureId ? requireObjectId(body.lectureId, 'lectureId') : undefined,
-    timestamp: optionalNumber(body.timestamp, 'timestamp', 0, 60 * 60 * 24 * 7) ?? 0,
+    episodeId,
+    lectureId,
+    timestamp: Math.floor(timestamp),
     updatedAt: new Date(),
   };
 
   const user = await User.findById(req.user._id);
   const profile = user.profiles[user.activeProfile];
   if (!profile) throw new ApiError(404, 'Profile not found');
-  const existing = profile.continueWatching.findIndex((c) => c.contentId?.toString() === contentId);
-  if (existing >= 0) profile.continueWatching[existing] = entry;
-  else profile.continueWatching.unshift(entry);
-  if (profile.continueWatching.length > 50)
-    profile.continueWatching = profile.continueWatching.slice(0, 50);
+  const kept = profile.continueWatching.filter((c) => c.contentId?.toString() !== contentId);
+  profile.continueWatching = [entry, ...kept]
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .slice(0, MAX_CONTINUE_WATCHING);
   await user.save();
   res.json(new ApiResponse(200, {}, 'Saved'));
+});
+
+// Takes a title off "continue watching" (finished, or the user dismissed it)
+exports.removeContinueWatching = asyncHandler(async (req, res) => {
+  const contentId = requireObjectId(req.params.contentId, 'contentId');
+  const user = await User.findById(req.user._id);
+  const profile = user.profiles[user.activeProfile];
+  if (!profile) throw new ApiError(404, 'Profile not found');
+  profile.continueWatching = profile.continueWatching.filter(
+    (c) => c.contentId?.toString() !== contentId
+  );
+  await user.save();
+  res.json(new ApiResponse(200, {}, 'Removed'));
 });
 
 // Admin: list viewers, optional name/email search (matched literally, not as a pattern)

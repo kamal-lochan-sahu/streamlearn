@@ -17,7 +17,7 @@ export default function Watchlist() {
   const remove = useMutation({
     mutationFn: (id) => api.delete(`/watchlist/remove/${id}`),
     onSuccess: () => {
-      qc.invalidateQueries(['watchlist']);
+      qc.invalidateQueries({ queryKey: ['watchlist'] });
       toast.success('Removed');
     },
   });

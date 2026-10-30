@@ -13,12 +13,12 @@ export default function Notifications() {
 
   const markRead = useMutation({
     mutationFn: (id) => api.put(`/notifications/${id}/read`),
-    onSuccess: () => qc.invalidateQueries(['notifications']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   const markAll = useMutation({
     mutationFn: () => api.put('/notifications/read-all'),
-    onSuccess: () => qc.invalidateQueries(['notifications']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   const notifications = data?.notifications || [];

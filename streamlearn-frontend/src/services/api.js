@@ -76,8 +76,9 @@ api.interceptors.response.use(
       }
     }
 
-    // Show errors, except the silent refresh call itself
-    const silent = original?.url?.startsWith('/auth/refresh-token');
+    // Show errors, except the silent refresh call and requests that handle their own errors
+    // (pass `{ silent: true }` in the request config: background saves, stream checks)
+    const silent = original?.url?.startsWith('/auth/refresh-token') || original?.silent === true;
     if (!silent) {
       const message = err.response?.data?.message || 'Something went wrong';
       toast.error(message);

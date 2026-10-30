@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Info } from 'lucide-react';
+import { playPath } from '../../utils/navigation';
 
 export default function HeroSection({ items = [] }) {
   const navigate = useNavigate();
@@ -52,7 +53,7 @@ export default function HeroSection({ items = [] }) {
 
         <div className="flex gap-2 sm:gap-3">
           <button
-            onClick={() => navigate(`/player/${item._id}`)}
+            onClick={() => navigate(playPath(item))}
             className="flex items-center gap-1.5 sm:gap-2 bg-white text-black px-4 sm:px-7 py-2.5 sm:py-3 rounded-lg font-bold text-sm sm:text-base hover:bg-white/90 transition-colors"
           >
             <Play size={18} fill="black" /> Play

@@ -100,6 +100,7 @@ module.exports = {
   hasActiveSubscription,
   canManageContent,
   canManageStream,
+  isPublished,
   checkContentAccess,
   checkLectureAccess,
   checkLiveAccess,

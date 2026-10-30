@@ -28,19 +28,19 @@ export default function AdminContents() {
   const createContent = useMutation({
     mutationFn: (d) => api.post('/content/admin/create', d),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-content']);
+      qc.invalidateQueries({ queryKey: ['admin-content'] });
       setShowCreate(false);
       toast.success('Created!');
     },
   });
   const toggleContent = useMutation({
     mutationFn: (id) => api.put(`/content/admin/${id}/toggle`),
-    onSuccess: () => qc.invalidateQueries(['admin-content']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-content'] }),
   });
   const deleteContent = useMutation({
     mutationFn: (id) => api.delete(`/content/admin/${id}`),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-content']);
+      qc.invalidateQueries({ queryKey: ['admin-content'] });
       toast.success('Deleted');
     },
   });

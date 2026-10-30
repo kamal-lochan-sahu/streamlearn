@@ -14,6 +14,7 @@ const watchlistSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-watchlistSchema.index({ userId: 1, profileIndex: 1 });
+// one list per profile; also what makes the upsert in the controller race-safe
+watchlistSchema.index({ userId: 1, profileIndex: 1 }, { unique: true });
 
 module.exports = mongoose.model('Watchlist', watchlistSchema);

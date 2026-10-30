@@ -1,69 +1,98 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileText } from 'lucide-react';
-import { useState } from 'react';
 import VideoPlayer from '../../components/player/VideoPlayer';
 import Loader from '../../components/common/Loader';
+import useProgressSaver from '../../hooks/useProgressSaver';
 import api from '../../services/api';
 
+// Reasons the server can refuse a stream, as the viewer should read them
+const BLOCKED_TEXT = {
+  401: ['Please sign in to watch.', 'Your session has ended.'],
+  403: ['Subscription or purchase required.', 'Subscribe or buy this title to start watching.'],
+  404: [
+    'Stream not available.',
+    'The video may still be processing, or it is no longer available.',
+  ],
+};
+
+/**
+ * /player/:id            id is a title slug (an id works too)
+ * /player/:id?type=episode   id is an episode id
+ */
 export default function Watch() {
   const { id } = useParams();
   const [sp] = useSearchParams();
+  const type = sp.get('type') === 'episode' ? 'episode' : 'content';
+  // a new key per video: saving state starts fresh, and the old video's last position is saved
+  // with the old video's id when the next episode takes over
+  return <WatchVideo key={`${type}:${id}`} id={id} type={type} />;
+}
+
+function WatchVideo({ id, type }) {
   const navigate = useNavigate();
-  const type = sp.get('type') || 'content';
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState('');
-  const saveTimer = useRef(null);
+  const contentIdRef = useRef(null);
 
   const { data: streamData, isLoading } = useQuery({
     queryKey: ['stream', id, type],
+    // a signed link is short-lived and the resume position changes: never reuse an old answer
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
     queryFn: async () => {
-      if (type === 'episode') {
-        return api.get(`/episodes/${id}/stream`).then((r) => r.data.data);
+      const url = type === 'episode' ? `/episodes/${id}/stream` : `/content/${id}/stream`;
+      try {
+        const res = await api.get(url, { silent: true });
+        return res.data.data;
+      } catch (err) {
+        return { blocked: err.response?.status || 0, message: err.response?.data?.message };
       }
-      return api
-        .get(`/content/${id}/stream`)
-        .then((r) => r.data.data)
-        .catch((err) => ({ blocked: err.response?.status }));
     },
   });
+  contentIdRef.current = streamData?.contentId || null;
 
-  const { data: progress } = useQuery({
-    queryKey: ['progress-ts', streamData?.contentId],
-    queryFn: () =>
+  const { onProgress, onPause, finish } = useProgressSaver((seconds) => {
+    if (!contentIdRef.current) return null;
+    return api.put(
+      '/users/continue-watching',
+      {
+        contentId: contentIdRef.current,
+        episodeId: type === 'episode' ? id : undefined,
+        timestamp: seconds,
+      },
+      { silent: true }
+    );
+  });
+
+  const handleEnded = async () => {
+    finish();
+    // next episode starts by itself; anything else leaves "continue watching"
+    if (type === 'episode' && streamData?.nextEpisodeId) {
+      navigate(`/player/${streamData.nextEpisodeId}?type=episode`, { replace: true });
+      return;
+    }
+    if (streamData?.contentId)
       api
-        .get(`/progress/content/${streamData.contentId}`)
-        .then((r) => r.data.data)
-        .catch(() => null),
-    enabled: !!streamData?.contentId,
-  });
-
-  const saveProgress = useMutation({
-    mutationFn: (ts) => api.put('/users/continue-watching', { contentId: id, timestamp: ts }),
-  });
-
-  const handleProgress = ({ currentTime }) => {
-    if (!currentTime || currentTime < 5) return;
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => saveProgress.mutate(Math.floor(currentTime)), 5000);
+        .delete(`/users/continue-watching/${streamData.contentId}`, { silent: true })
+        .catch(() => {});
   };
 
   if (isLoading) return <Loader fullScreen />;
 
-  if (!streamData?.url)
+  if (!streamData?.url) {
+    const [title, hint] = BLOCKED_TEXT[streamData?.blocked] || BLOCKED_TEXT[404];
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <p className="text-white text-lg">
-          {streamData?.blocked === 403
-            ? 'Subscription or purchase required.'
-            : 'Stream not available.'}
-        </p>
-        <p className="text-text-secondary text-sm">
-          {streamData?.blocked === 403
-            ? 'Subscribe or buy this title to start watching.'
-            : 'Video may still be processing.'}
-        </p>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-white text-lg">{title}</p>
+        <p className="text-text-secondary text-sm">{streamData?.message || hint}</p>
+        {streamData?.blocked === 401 && (
+          <button onClick={() => navigate('/login')} className="text-brand hover:underline text-sm">
+            Sign in
+          </button>
+        )}
         {streamData?.blocked === 403 && (
           <button
             onClick={() => navigate('/subscription')}
@@ -77,6 +106,7 @@ export default function Watch() {
         </button>
       </div>
     );
+  }
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -101,8 +131,10 @@ export default function Watch() {
           <VideoPlayer
             src={streamData.url}
             poster={streamData.thumbnail}
-            startTime={progress?.lastTimestamp || 0}
-            onProgress={handleProgress}
+            startTime={streamData.resumeAt || 0}
+            onProgress={onProgress}
+            onPause={onPause}
+            onEnded={handleEnded}
             options={{ autoPlay: true }}
           />
         </div>

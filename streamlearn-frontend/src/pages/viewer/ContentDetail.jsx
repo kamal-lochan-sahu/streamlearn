@@ -26,6 +26,14 @@ export default function ContentDetail() {
     enabled: !!content?._id,
   });
 
+  // where this viewer left off: episode / lecture and seconds
+  const { data: resume } = useQuery({
+    queryKey: ['resume', content?._id],
+    queryFn: () => api.get(`/content/${slug}/resume`).then((r) => r.data.data),
+    enabled: !!content?._id,
+    staleTime: 0,
+  });
+
   const { data: progress } = useQuery({
     queryKey: ['progress', content?._id],
     queryFn: () => api.get(`/progress/content/${content._id}`).then((r) => r.data.data),
@@ -38,24 +46,29 @@ export default function ContentDetail() {
         ? api.delete(`/watchlist/remove/${content._id}`)
         : api.post(`/watchlist/add/${content._id}`),
     onSuccess: () => {
-      qc.invalidateQueries(['wl-check', content._id]);
+      qc.invalidateQueries({ queryKey: ['wl-check', content._id] });
+      qc.invalidateQueries({ queryKey: ['watchlist'] });
       toast.success(wlCheck?.inWatchlist ? 'Removed from watchlist' : 'Added to watchlist');
     },
   });
 
   const handlePlay = () => {
     if (content.type === 'series') {
-      const ep = content.episodes?.[0];
+      const episodes = content.episodes || [];
+      // continue with the episode the viewer stopped at, else the first one
+      const ep = episodes.find((e) => e._id === resume?.episodeId) || episodes[0];
       if (ep) navigate(`/player/${ep._id}?type=episode`);
       else toast.error('No episodes yet');
     } else if (content.type === 'course') {
-      const lec = content.sections?.[0]?.lectures?.[0];
-      if (lec) navigate(`/learn/${content._id}/${lec._id}`);
+      const lectures = (content.sections || []).flatMap((s) => s.lectures || []);
+      const lec = lectures.find((l) => l._id === resume?.lectureId) || lectures[0];
+      if (lec) navigate(`/learn/${content.slug}/${lec._id}`);
       else toast.error('No lectures yet');
     } else {
-      navigate(`/player/${content._id}`);
+      navigate(`/player/${content.slug}`);
     }
   };
+  const hasStarted = (resume?.timestamp || 0) > 0 || (progress?.completionPercent || 0) > 0;
 
   if (isLoading) return <Loader fullScreen />;
   if (!content)
@@ -119,7 +132,7 @@ export default function ContentDetail() {
               className="flex items-center gap-2 bg-white text-black font-bold px-7 py-3 rounded-lg hover:bg-white/90 transition-colors"
             >
               <Play size={18} fill="black" />
-              {progress?.completionPercent > 0 ? 'Resume' : isCourse ? 'Start Course' : 'Play'}
+              {hasStarted ? 'Resume' : isCourse ? 'Start Course' : 'Play'}
             </button>
             <button
               onClick={() => toggleWL.mutate()}
@@ -163,7 +176,7 @@ export default function ContentDetail() {
                         section.lectures?.map((lec, li) => (
                           <button
                             key={lec._id}
-                            onClick={() => navigate(`/learn/${content._id}/${lec._id}`)}
+                            onClick={() => navigate(`/learn/${content.slug}/${lec._id}`)}
                             className="w-full flex items-center gap-4 px-5 py-3 hover:bg-bg-elevated transition-colors border-t border-border/50 text-left"
                           >
                             <span className="text-xs text-text-muted w-5">{li + 1}</span>
