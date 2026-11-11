@@ -3,6 +3,7 @@ const Content = require('../models/Content');
 const Episode = require('../models/Episode');
 const Lecture = require('../models/Lecture');
 const Notification = require('../models/Notification');
+const Watchlist = require('../models/Watchlist');
 const cloudinary = require('../config/cloudinary');
 const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
@@ -75,7 +76,15 @@ exports.addProfile = asyncHandler(async (req, res) => {
     throw new ApiError(400, `Maximum ${MAX_PROFILES} profiles`);
   user.profiles.push({ name, kidMode });
   await user.save();
-  res.status(201).json(new ApiResponse(201, user.profiles, 'Profile added'));
+  res
+    .status(201)
+    .json(
+      new ApiResponse(
+        201,
+        { profiles: user.profiles, activeProfile: user.activeProfile },
+        'Profile added'
+      )
+    );
 });
 
 exports.updateProfileByIndex = asyncHandler(async (req, res) => {
@@ -116,9 +125,24 @@ exports.deleteProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
   if (index >= user.profiles.length) throw new ApiError(404, 'Profile not found');
   user.profiles.splice(index, 1);
-  if (user.activeProfile >= user.profiles.length) user.activeProfile = 0;
+  // Profiles are addressed by position, so everything after the deleted one moves up by one.
+  // The active profile must keep pointing at the same person (or fall back to the first).
+  if (user.activeProfile === index) user.activeProfile = 0;
+  else if (user.activeProfile > index) user.activeProfile -= 1;
   await user.save();
-  res.json(new ApiResponse(200, {}, 'Deleted'));
+
+  // Watchlists are stored per profile position too: drop the deleted profile's list and move
+  // the later ones up (one by one, lowest first, so the unique index is never hit twice).
+  await Watchlist.deleteOne({ userId: req.user._id, profileIndex: index });
+  const later = await Watchlist.find({ userId: req.user._id, profileIndex: { $gt: index } })
+    .sort('profileIndex')
+    .select('profileIndex');
+  for (const list of later)
+    await Watchlist.updateOne({ _id: list._id }, { $set: { profileIndex: list.profileIndex - 1 } });
+
+  res.json(
+    new ApiResponse(200, { profiles: user.profiles, activeProfile: user.activeProfile }, 'Deleted')
+  );
 });
 
 exports.switchProfile = asyncHandler(async (req, res) => {

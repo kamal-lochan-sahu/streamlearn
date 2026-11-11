@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import Loader from './components/common/Loader';
@@ -6,6 +6,9 @@ import Loader from './components/common/Loader';
 // ── Lazy load all pages ───────────────────────────────
 // Auth
 const Login = lazy(() => import('./pages/auth/Login'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const OtpLogin = lazy(() => import('./pages/auth/OtpLogin'));
 const Register = lazy(() => import('./pages/auth/Register'));
 const GoogleCallback = lazy(() => import('./pages/auth/GoogleCallback'));
 const Onboarding = lazy(() => import('./pages/auth/Onboarding'));
@@ -59,6 +62,14 @@ const PublicRoute = ({ children }) => {
 };
 
 export default function App() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+
+  // The saved user may be old: role, subscription and profiles can change on the server
+  useEffect(() => {
+    if (isAuthenticated) refreshUser().catch(() => {});
+  }, [isAuthenticated, refreshUser]);
+
   return (
     <Suspense fallback={<Loader fullScreen />}>
       <Routes>
@@ -72,6 +83,24 @@ export default function App() {
           }
         />
         <Route path="/auth/callback" element={<GoogleCallback />} />
+        <Route
+          path="/login/otp"
+          element={
+            <PublicRoute>
+              <OtpLogin />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <PublicRoute>
+              <ForgotPassword />
+            </PublicRoute>
+          }
+        />
+        {/* not a PublicRoute: someone who is signed in may still open a reset link */}
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route
           path="/register"
           element={

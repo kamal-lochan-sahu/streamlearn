@@ -1,13 +1,109 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, Edit2, Plus, Trash2 } from 'lucide-react';
+import { Camera, Edit2, Plus, Trash2, Lock } from 'lucide-react';
 import Navbar from '../../components/common/Navbar';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
+// Change password: the server checks the current password and signs out every other device
+function ChangePassword() {
+  const applySession = useAuthStore((s) => s.applySession);
+  const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const change = useMutation({
+    mutationFn: () =>
+      api.post('/auth/change-password', {
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+      }),
+    onSuccess: (res) => {
+      applySession(res.data.data); // this device gets the new session
+      setForm({ currentPassword: '', newPassword: '', confirm: '' });
+      toast.success('Password changed. Other devices were signed out.');
+    },
+  });
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (form.newPassword.length < 8)
+      return toast.error('New password must be at least 8 characters');
+    if (form.newPassword !== form.confirm) return toast.error('Passwords do not match');
+    change.mutate();
+  };
+
+  const field =
+    'w-full bg-bg-surface border border-border rounded-lg px-4 py-3 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-brand';
+  return (
+    <div className="bg-bg-secondary border border-border rounded-2xl p-6">
+      <h3 className="font-bold mb-5 flex items-center gap-2">
+        <Lock size={16} /> Change password
+      </h3>
+      <form onSubmit={submit} className="space-y-3">
+        <input
+          type="password"
+          autoComplete="current-password"
+          placeholder="Current password"
+          value={form.currentPassword}
+          onChange={set('currentPassword')}
+          className={field}
+        />
+        <input
+          type="password"
+          autoComplete="new-password"
+          placeholder="New password"
+          value={form.newPassword}
+          onChange={set('newPassword')}
+          className={field}
+        />
+        <input
+          type="password"
+          autoComplete="new-password"
+          placeholder="Repeat new password"
+          value={form.confirm}
+          onChange={set('confirm')}
+          className={field}
+        />
+        <button
+          type="submit"
+          disabled={change.isPending || !form.currentPassword}
+          className="bg-brand hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg"
+        >
+          {change.isPending ? 'Saving...' : 'Change password'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export default function Profile() {
-  const { user, updateUser } = useAuthStore();
+  const { user, updateUser, switchProfile } = useAuthStore();
+  const qc = useQueryClient();
+
+  // The server answers add/delete with the new profile list: no page reload needed
+  const syncProfiles = (res) => {
+    updateUser(res.data.data);
+    qc.invalidateQueries();
+  };
+  const addProfile = useMutation({
+    mutationFn: (name) => api.post('/users/profiles', { name }),
+    onSuccess: (res) => {
+      syncProfiles(res);
+      toast.success('Profile added');
+    },
+  });
+  const removeProfile = useMutation({
+    mutationFn: (index) => api.delete(`/users/profiles/${index}`),
+    onSuccess: (res) => {
+      syncProfiles(res);
+      toast.success('Profile deleted');
+    },
+  });
+  const activate = useMutation({
+    mutationFn: (index) => switchProfile(index),
+    onSuccess: () => qc.invalidateQueries(),
+  });
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
 
@@ -119,9 +215,8 @@ export default function Profile() {
               {profiles.length < 5 && (
                 <button
                   onClick={() => {
-                    const n = prompt('Profile name?');
-                    if (n)
-                      api.post('/users/profiles', { name: n }).then(() => window.location.reload());
+                    const n = prompt('Profile name?')?.trim();
+                    if (n) addProfile.mutate(n);
                   }}
                   className="flex items-center gap-1.5 text-sm text-brand hover:text-white"
                 >
@@ -140,13 +235,23 @@ export default function Profile() {
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-sm">{p.name}</p>
-                    {i === user?.activeProfile && <p className="text-xs text-brand">Active</p>}
+                    {i === user?.activeProfile ? (
+                      <p className="text-xs text-brand">Active</p>
+                    ) : (
+                      <button
+                        onClick={() => activate.mutate(i)}
+                        className="text-xs text-text-secondary hover:text-white"
+                      >
+                        Switch to this profile
+                      </button>
+                    )}
                   </div>
                   {i > 0 && (
                     <button
-                      onClick={() =>
-                        api.delete(`/users/profiles/${i}`).then(() => window.location.reload())
-                      }
+                      onClick={() => {
+                        if (confirm(`Delete profile "${p.name}"? Its watchlist is deleted too.`))
+                          removeProfile.mutate(i);
+                      }}
                       className="text-text-muted hover:text-red-400"
                     >
                       <Trash2 size={15} />
@@ -156,6 +261,7 @@ export default function Profile() {
               ))}
             </div>
           </div>
+          <ChangePassword />
         </div>
       </div>
     </div>

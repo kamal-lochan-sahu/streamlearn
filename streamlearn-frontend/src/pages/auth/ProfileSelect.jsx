@@ -1,17 +1,20 @@
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import api from '../../services/api';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function ProfileSelect() {
   const navigate = useNavigate();
-  const { user, switchProfile } = useAuthStore();
+  const { user, switchProfile, activeProfileIndex } = useAuthStore();
+  const qc = useQueryClient();
   const profiles = user?.profiles || [];
   const handleSelect = async (index) => {
     try {
-      await api.put(`/users/profiles/${index}/switch`);
-    } catch {}
-    switchProfile(index);
+      await switchProfile(index);
+    } catch {
+      return; // the server did not switch: stay on this screen (the API client shows why)
+    }
+    qc.invalidateQueries(); // continue watching, watchlist and picks belong to the profile
     navigate('/');
   };
   return (
@@ -25,7 +28,7 @@ export default function ProfileSelect() {
             className="flex flex-col items-center gap-3 group"
           >
             <div
-              className={`w-24 h-24 rounded-xl flex items-center justify-center text-3xl font-black text-white border-4 transition-all ${i === user?.activeProfile ? 'border-brand' : 'border-transparent group-hover:border-white'} ${profile.kidMode ? 'bg-blue-600' : 'bg-brand'}`}
+              className={`w-24 h-24 rounded-xl flex items-center justify-center text-3xl font-black text-white border-4 transition-all ${i === activeProfileIndex ? 'border-brand' : 'border-transparent group-hover:border-white'} ${profile.kidMode ? 'bg-blue-600' : 'bg-brand'}`}
             >
               {profile.avatar ? (
                 <img
@@ -38,7 +41,7 @@ export default function ProfileSelect() {
               )}
             </div>
             <span
-              className={`text-sm font-medium transition-colors ${i === user?.activeProfile ? 'text-white' : 'text-text-secondary group-hover:text-white'}`}
+              className={`text-sm font-medium transition-colors ${i === activeProfileIndex ? 'text-white' : 'text-text-secondary group-hover:text-white'}`}
             >
               {profile.name}
             </span>

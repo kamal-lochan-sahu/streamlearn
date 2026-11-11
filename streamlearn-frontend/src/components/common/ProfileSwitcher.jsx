@@ -5,9 +5,13 @@ export default function ProfileSwitcher({ onSwitch }) {
   const { user, activeProfileIndex, switchProfile } = useAuthStore();
   const profiles = user?.profiles || [];
 
-  const handleSwitch = (index) => {
-    switchProfile(index);
-    onSwitch?.(index);
+  const handleSwitch = async (index) => {
+    try {
+      await switchProfile(index);
+      onSwitch?.(index);
+    } catch {
+      // the API client shows the error; the screen keeps the current profile
+    }
   };
 
   return (

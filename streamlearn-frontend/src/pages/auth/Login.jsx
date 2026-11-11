@@ -24,7 +24,6 @@ export default function Login() {
     if (!form.email) e.email = 'Email required';
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Invalid email';
     if (!form.password) e.password = 'Password required';
-    else if (form.password.length < 6) e.password = 'Min 6 characters';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -119,8 +118,14 @@ export default function Login() {
                 )}
               </div>
 
-              {/* Forgot password */}
-              <div className="flex justify-end">
+              {/* Forgot password / email code */}
+              <div className="flex justify-between">
+                <Link
+                  to="/login/otp"
+                  className="text-xs text-text-secondary hover:text-white transition-colors"
+                >
+                  Sign in with email code
+                </Link>
                 <Link
                   to="/forgot-password"
                   className="text-xs text-text-secondary hover:text-white transition-colors"
