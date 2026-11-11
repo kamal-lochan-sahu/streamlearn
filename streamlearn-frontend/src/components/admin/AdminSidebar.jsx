@@ -10,12 +10,14 @@ import {
   Video,
   Tag,
   Bell,
+  MessageSquare,
 } from 'lucide-react';
 
 const links = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin/content', label: 'Content', icon: Film },
   { to: '/admin/users', label: 'Users', icon: Users },
+  { to: '/admin/reviews', label: 'Reviews', icon: MessageSquare },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/admin/plans', label: 'Plans', icon: ListOrdered },
   { to: '/admin/transactions', label: 'Transactions', icon: CreditCard },

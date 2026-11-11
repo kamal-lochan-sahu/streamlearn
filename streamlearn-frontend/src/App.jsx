@@ -36,6 +36,7 @@ const Certificates = lazy(() => import('./pages/education/Certificates'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminContents = lazy(() => import('./pages/admin/Contents'));
 const AdminUsers = lazy(() => import('./pages/admin/Users'));
+const AdminReviews = lazy(() => import('./pages/admin/Reviews'));
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'));
 const AdminSettings = lazy(() => import('./pages/admin/Settings'));
 const AdminPlans = lazy(() => import('./pages/admin/Plans'));
@@ -284,6 +285,14 @@ export default function App() {
           element={
             <AdminRoute>
               <AdminUsers />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/reviews"
+          element={
+            <AdminRoute>
+              <AdminReviews />
             </AdminRoute>
           }
         />

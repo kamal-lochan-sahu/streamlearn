@@ -13,6 +13,7 @@ router.get('/continue-watching', authenticate, ctrl.getContinueWatching);
 router.get('/recommendations', authenticate, ctrl.getRecommendations);
 
 // ── Admin / creator routes (creators can only touch their own content, checked in the controller) ──
+router.get('/admin/list', authenticate, isCreator, ctrl.adminList);
 router.post('/admin/create', authenticate, isCreator, ctrl.create);
 router.put('/admin/:id/toggle', authenticate, isCreator, ctrl.toggle);
 router.get('/admin/:id/analytics', authenticate, isAdmin, ctrl.getAnalytics);

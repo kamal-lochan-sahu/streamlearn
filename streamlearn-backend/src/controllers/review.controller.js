@@ -4,8 +4,13 @@ const Content = require('../models/Content');
 const { ApiError } = require('../utils/ApiError');
 const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { requireObjectId, optionalInt, optionalString } = require('../utils/validate.utils');
-const { pageParams } = require('../utils/query.utils');
+const {
+  requireObjectId,
+  optionalInt,
+  optionalString,
+  optionalBoolean,
+} = require('../utils/validate.utils');
+const { pageParams, queryEnum, queryInt } = require('../utils/query.utils');
 
 /** Reads and validates rating/title/body. With `partial`, missing fields are simply left out. */
 const parseReviewInput = (body, { partial }) => {
@@ -44,6 +49,7 @@ exports.create = asyncHandler(async (req, res) => {
   // Only whitelisted fields are stored: helpful, isVerified, isActive, userId come from the server.
   let review = await Review.findOne({ contentId, userId: req.user._id });
   if (review && review.isActive) throw new ApiError(409, 'Already reviewed');
+  if (review?.moderated) throw new ApiError(403, 'Your review was removed by a moderator');
   if (review) {
     // The user deleted an earlier review: bring it back with the new text
     Object.assign(review, fields, { isActive: true });
@@ -116,4 +122,46 @@ exports.markHelpful = asyncHandler(async (req, res) => {
   );
   if (!removed) throw new ApiError(404, 'Review not found');
   res.json(new ApiResponse(200, { helpful: Math.max(0, removed.helpful.count), marked: false }));
+});
+
+// ── Staff moderation ──────────────────────────────────
+// GET /api/reviews/admin/all?status=all|visible|hidden &rating=1..5 &page &limit
+// "hidden" means hidden by staff; reviews the author deleted are not listed.
+exports.adminList = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = pageParams(req.query, { defaultLimit: 20, maxLimit: 100 });
+  const status = queryEnum(req.query.status, ['all', 'visible', 'hidden'], 'status') || 'all';
+  const rating = queryInt(req.query.rating, 'rating', 1, 5);
+  const filter =
+    status === 'visible'
+      ? { isActive: true }
+      : status === 'hidden'
+        ? { moderated: true }
+        : { $or: [{ isActive: true }, { moderated: true }] };
+  if (rating) filter.rating = rating;
+  const [reviews, total] = await Promise.all([
+    Review.find(filter)
+      .populate('userId', 'name email')
+      .populate('contentId', 'title slug')
+      .select('-helpful.users')
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(limit),
+    Review.countDocuments(filter),
+  ]);
+  res.json(new ApiResponse(200, { reviews, total, page, pages: Math.ceil(total / limit) }));
+});
+
+// PUT /api/reviews/admin/:id/visibility  { visible: boolean }
+exports.setVisibility = asyncHandler(async (req, res) => {
+  const id = requireObjectId(req.params.id, 'review id');
+  const visible = optionalBoolean((req.body || {}).visible, 'visible');
+  if (visible === undefined) throw new ApiError(400, 'visible (true or false) required');
+  const review = await Review.findOneAndUpdate(
+    { _id: id, $or: [{ isActive: true }, { moderated: true }] },
+    { $set: { isActive: visible, moderated: !visible } },
+    { new: true }
+  );
+  if (!review) throw new ApiError(404, 'Review not found');
+  await refreshContentRating(review.contentId);
+  res.json(new ApiResponse(200, { isActive: review.isActive, moderated: review.moderated }));
 });

@@ -17,7 +17,7 @@ const {
   requireObjectId,
   parseIndex,
 } = require('../utils/validate.utils');
-const { queryString, escapeRegex, pageParams } = require('../utils/query.utils');
+const { queryString, queryEnum, escapeRegex, pageParams } = require('../utils/query.utils');
 
 // Never send secrets (password hash, OTP hash, reset token ...) to a client.
 const SAFE_USER =
@@ -188,11 +188,15 @@ exports.removeContinueWatching = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, {}, 'Removed'));
 });
 
-// Admin: list viewers, optional name/email search (matched literally, not as a pattern)
+// Admin: list accounts, optional search (matched literally, not as a pattern), role and status
 exports.getAllUsers = asyncHandler(async (req, res) => {
   const { page, limit, skip } = pageParams(req.query, { defaultLimit: 20, maxLimit: 100 });
   const search = queryString(req.query.search, 'search', 60);
-  const query = { role: 'viewer' };
+  const role = queryEnum(req.query.role, ['viewer', 'creator', 'admin', 'owner'], 'role');
+  const status = queryEnum(req.query.status, ['active', 'banned'], 'status');
+  const query = {};
+  if (role) query.role = role;
+  if (status) query.isActive = status === 'active';
   if (search) {
     const pattern = new RegExp(escapeRegex(search), 'i');
     query.$or = [{ name: pattern }, { email: pattern }];
@@ -202,6 +206,43 @@ exports.getAllUsers = asyncHandler(async (req, res) => {
     User.countDocuments(query),
   ]);
   res.json(new ApiResponse(200, { users, total, page, pages: Math.ceil(total / limit) }));
+});
+
+// The account an admin action is about. Nobody edits themselves here, nobody touches the
+// owner, and only the owner touches other admins.
+const loadManagedUser = async (req) => {
+  const id = requireObjectId(req.params.id, 'user id');
+  if (id === String(req.user._id))
+    throw new ApiError(400, 'You cannot change your own account here');
+  const target = await User.findById(id).select('role isActive');
+  if (!target) throw new ApiError(404, 'User not found');
+  if (target.role === 'owner') throw new ApiError(403, 'The owner account cannot be changed');
+  if (target.role === 'admin' && req.user.role !== 'owner')
+    throw new ApiError(403, 'Only the owner can change an admin');
+  return target;
+};
+
+// PUT /api/users/admin/:id/status  { isActive: boolean }  (ban / unban)
+exports.setUserStatus = asyncHandler(async (req, res) => {
+  const isActive = optionalBoolean((req.body || {}).isActive, 'isActive');
+  if (isActive === undefined) throw new ApiError(400, 'isActive (true or false) required');
+  const target = await loadManagedUser(req);
+  // A ban also ends the session: the refresh token is removed (the access token stops working
+  // at once because every request loads the account and checks isActive).
+  await User.updateOne(
+    { _id: target._id },
+    isActive ? { $set: { isActive } } : { $set: { isActive }, $unset: { refreshToken: 1 } }
+  );
+  res.json(new ApiResponse(200, { isActive }, isActive ? 'Account restored' : 'Account banned'));
+});
+
+// PUT /api/users/admin/:id/role  { role }  (owner only, see the route)
+exports.setUserRole = asyncHandler(async (req, res) => {
+  const role = queryEnum((req.body || {}).role, ['viewer', 'creator', 'admin'], 'role');
+  if (!role) throw new ApiError(400, 'role required');
+  const target = await loadManagedUser(req);
+  await User.updateOne({ _id: target._id }, { $set: { role } });
+  res.json(new ApiResponse(200, { role }, 'Role updated'));
 });
 
 exports.getNotifCount = asyncHandler(async (req, res) => {

@@ -23,6 +23,7 @@ const { contentResumeAt, resumeInfo } = require('../services/resume.service');
 const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
 const { videoUpload, imageUpload, removeFile } = require('../utils/upload.utils');
 const { requireObjectId, isObjectId, omitKeys } = require('../utils/validate.utils');
+const { queryString, queryEnum, pageParams, escapeRegex } = require('../utils/query.utils');
 const {
   search: searchCatalog,
   parseCatalogInput,
@@ -273,6 +274,34 @@ exports.getEpisodes = asyncHandler(async (req, res) => {
     .sort('seasonNumber episodeNumber')
     .select('-videoFiles');
   res.json(new ApiResponse(200, episodes));
+});
+
+// ── ADMIN: GET /api/content/admin/list ────────────────
+// Everything the person may manage, drafts included (staff: all titles, creator: own titles).
+// ?q=text &status=all|live|draft &type=movie... &page &limit
+exports.adminList = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = pageParams(req.query, { defaultLimit: 20, maxLimit: 100 });
+  const q = queryString(req.query.q, 'Search text', 100);
+  const status = queryEnum(req.query.status, ['all', 'live', 'draft'], 'status') || 'all';
+  const type = queryEnum(req.query.type, Content.schema.path('type').enumValues, 'type');
+
+  const filter = {};
+  if (req.user.role === 'creator') filter.ownerId = req.user._id;
+  if (status !== 'all') filter.isActive = status === 'live';
+  if (type) filter.type = type;
+  if (q) filter.title = new RegExp(escapeRegex(q), 'i');
+
+  const [items, total] = await Promise.all([
+    Content.find(filter)
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(limit)
+      .select(
+        'title slug thumbnail type access price isActive transcodeStatus viewCount createdAt ownerId'
+      ),
+    Content.countDocuments(filter),
+  ]);
+  res.json(new ApiResponse(200, { items, total, page, pages: Math.ceil(total / limit) }));
 });
 
 // ── ADMIN: POST /api/content/admin/create ────────────

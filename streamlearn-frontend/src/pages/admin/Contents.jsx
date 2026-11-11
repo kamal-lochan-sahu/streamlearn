@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, Trash2, Eye, EyeOff, Upload } from 'lucide-react';
 import AdminSidebar from '../../components/admin/AdminSidebar';
 import Modal from '../../components/ui/Modal';
@@ -7,6 +7,7 @@ import Badge from '../../components/ui/Badge';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatDate } from '../../utils/formatters';
+import { useAuthStore } from '../../store/authStore';
 
 export default function AdminContents() {
   const [showCreate, setShowCreate] = useState(false);
@@ -18,11 +19,20 @@ export default function AdminContents() {
     genre: '',
   });
   const [uploading, setUploading] = useState({});
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
   const qc = useQueryClient();
+  const isAdmin = ['owner', 'admin'].includes(useAuthStore((s) => s.user?.role));
 
+  // The admin list includes drafts (the public browse endpoint only has published titles)
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-content'],
-    queryFn: () => api.get('/content?limit=50').then((r) => r.data.data),
+    queryKey: ['admin-content', page, search, status],
+    queryFn: () =>
+      api
+        .get('/content/admin/list', { params: { page, limit: 20, q: search || undefined, status } })
+        .then((r) => r.data.data),
+    placeholderData: keepPreviousData,
   });
 
   const createContent = useMutation({
@@ -76,7 +86,7 @@ export default function AdminContents() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold">Content</h1>
-            <p className="text-text-secondary text-sm mt-1">{items.length} items</p>
+            <p className="text-text-secondary text-sm mt-1">{data?.total ?? 0} items</p>
           </div>
           <button
             onClick={() => setShowCreate(true)}
@@ -84,6 +94,30 @@ export default function AdminContents() {
           >
             <Plus size={16} /> Add
           </button>
+        </div>
+
+        <div className="flex flex-wrap gap-3 mb-4">
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search title..."
+            className="bg-bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand w-64"
+          />
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+            className="bg-bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand"
+          >
+            <option value="all">All</option>
+            <option value="live">Live</option>
+            <option value="draft">Draft</option>
+          </select>
         </div>
 
         <div className="bg-bg-secondary border border-border rounded-2xl overflow-hidden">
@@ -182,25 +216,56 @@ export default function AdminContents() {
                           </label>
                           <button
                             onClick={() => toggleContent.mutate(item._id)}
+                            title={item.isActive ? 'Unpublish (make draft)' : 'Publish'}
                             className="p-1.5 text-text-muted hover:text-white"
                           >
                             {item.isActive ? <EyeOff size={15} /> : <Eye size={15} />}
                           </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Delete?')) deleteContent.mutate(item._id);
-                            }}
-                            className="p-1.5 text-text-muted hover:text-red-400"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => {
+                                if (confirm('Delete?')) deleteContent.mutate(item._id);
+                              }}
+                              className="p-1.5 text-text-muted hover:text-red-400"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))}
+              {!isLoading && items.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-16 text-text-secondary">
+                    No content found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+        {data?.pages > 1 && (
+          <div className="flex items-center justify-center gap-4 mt-5 text-sm">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="px-4 py-2 bg-bg-secondary border border-border rounded-lg disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-text-secondary">
+              Page {data.page} of {data.pages}
+            </span>
+            <button
+              disabled={page >= data.pages}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-4 py-2 bg-bg-secondary border border-border rounded-lg disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        )}
 
         <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add Content">
           <div className="space-y-4">

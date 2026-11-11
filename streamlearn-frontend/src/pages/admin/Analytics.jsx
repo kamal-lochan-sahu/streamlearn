@@ -1,12 +1,46 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users, TrendingUp, Film, Star } from 'lucide-react';
+import { useState } from 'react';
+import { Users, TrendingUp, Film, Star, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
 import AdminSidebar from '../../components/admin/AdminSidebar';
 import StatsCard from '../../components/admin/StatsCard';
 import { RevenueLineChart, SubscriberBarChart } from '../../components/admin/RevenueChart';
 import api from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 
+const EXPORTS = [
+  ['transactions', 'Transactions'],
+  ['subscriptions', 'Subscriptions'],
+  ['users', 'Users'],
+  ['content', 'Content'],
+];
+
 export default function AdminAnalytics() {
+  const [exporting, setExporting] = useState('');
+  const [days, setDays] = useState(30);
+
+  // Downloads the CSV through the API client (it carries the login token)
+  const downloadCsv = async (type) => {
+    setExporting(type);
+    try {
+      const res = await api.get('/analytics/export', {
+        params: { type, days },
+        responseType: 'blob',
+        silent: true,
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `streamlearn-${type}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting('');
+    }
+  };
+
   const { data: dashboard } = useQuery({
     queryKey: ['analytics-dash'],
     queryFn: () => api.get('/analytics/dashboard').then((r) => r.data.data),
@@ -20,7 +54,32 @@ export default function AdminAnalytics() {
     <div className="min-h-screen bg-bg-primary flex">
       <AdminSidebar />
       <main className="ml-64 flex-1 p-8">
-        <h1 className="text-2xl font-bold mb-8">Analytics</h1>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <h1 className="text-2xl font-bold">Analytics</h1>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <select
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="bg-bg-secondary border border-border rounded-lg px-3 py-2"
+            >
+              {[7, 30, 90, 365].map((d) => (
+                <option key={d} value={d}>
+                  Last {d} days
+                </option>
+              ))}
+            </select>
+            {EXPORTS.map(([type, label]) => (
+              <button
+                key={type}
+                onClick={() => downloadCsv(type)}
+                disabled={!!exporting}
+                className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border rounded-lg hover:border-white disabled:opacity-50"
+              >
+                <Download size={14} /> {exporting === type ? 'Preparing...' : label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatsCard
             title="Total Users"

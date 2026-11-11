@@ -10,6 +10,8 @@ const reviewSchema = new mongoose.Schema(
     helpful: { count: { type: Number, default: 0 }, users: [mongoose.Schema.Types.ObjectId] },
     isVerified: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
+    // hidden by staff: the author cannot bring it back by posting again
+    moderated: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

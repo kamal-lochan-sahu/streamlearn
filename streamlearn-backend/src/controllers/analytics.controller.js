@@ -6,6 +6,9 @@ const LiveStream = require('../models/LiveStream');
 const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { clampInt } = require('../utils/validate.utils');
+const { queryEnum, queryInt } = require('../utils/query.utils');
+const { ApiError } = require('../utils/ApiError');
+const { EXPORT_TYPES, streamCsv } = require('../services/export.service');
 
 exports.getDashboard = asyncHandler(async (req, res) => {
   const [totalUsers, activeSubscriptions, totalContent, revenueData, newUsersThisMonth] =
@@ -127,7 +130,11 @@ exports.getLive = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, streams));
 });
 
+// GET /api/analytics/export?type=transactions|subscriptions|users|content &days=1..3650 (default 30)
+// A real CSV download (it used to answer "export queued" and do nothing).
 exports.exportData = asyncHandler(async (req, res) => {
-  // TODO: generate CSV/PDF export
-  res.json(new ApiResponse(200, { message: 'Export queued. You will receive an email.' }));
+  const type = queryEnum(req.query.type, EXPORT_TYPES, 'type');
+  if (!type) throw new ApiError(400, `type required: ${EXPORT_TYPES.join(', ')}`);
+  const days = queryInt(req.query.days, 'days', 1, 3650) || 30;
+  await streamCsv(res, type, new Date(Date.now() - days * 24 * 60 * 60 * 1000));
 });
