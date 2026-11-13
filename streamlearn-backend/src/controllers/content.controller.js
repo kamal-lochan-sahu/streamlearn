@@ -7,9 +7,8 @@ const { ApiResponse } = require('../utils/ApiResponse');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { buildStreamUrl, QUALITIES } = require('../utils/hls.utils');
 const { get: cGet, set: cSet, del: cDel } = require('../services/cache.service');
-const { transcodingQueue } = require('../queue/jobQueue');
+const { queueTranscode } = require('../services/video.service');
 const cloudinary = require('../config/cloudinary');
-const fs = require('fs');
 const slugify = require('slugify');
 const {
   checkContentAccess,
@@ -20,7 +19,7 @@ const {
   CONTENT_ACCESS_FIELDS,
 } = require('../services/access.service');
 const { contentResumeAt, resumeInfo } = require('../services/resume.service');
-const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
+const { hlsDirName } = require('../utils/paths.utils');
 const { videoUpload, imageUpload, removeFile } = require('../utils/upload.utils');
 const { requireObjectId, isObjectId, omitKeys } = require('../utils/validate.utils');
 const { queryString, queryEnum, pageParams, escapeRegex } = require('../utils/query.utils');
@@ -46,6 +45,8 @@ const SERVER_MANAGED = [
   'slug',
   'videoFiles',
   'transcodeStatus',
+  'transcodeJobId',
+  'transcodeError',
   'viewCount',
   'rating',
 ];
@@ -297,11 +298,13 @@ exports.adminList = asyncHandler(async (req, res) => {
       .skip(skip)
       .limit(limit)
       .select(
-        'title slug thumbnail type access price isActive transcodeStatus viewCount createdAt ownerId'
+        'title slug thumbnail type access price isActive transcodeStatus transcodeError duration viewCount createdAt ownerId'
       ),
     Content.countDocuments(filter),
   ]);
-  res.json(new ApiResponse(200, { items, total, page, pages: Math.ceil(total / limit) }));
+  // transcodeError is hidden in normal JSON; the admin list shows it next to a failed upload
+  const rows = items.map((item) => ({ ...item.toJSON(), transcodeError: item.transcodeError }));
+  res.json(new ApiResponse(200, { items: rows, total, page, pages: Math.ceil(total / limit) }));
 });
 
 // ── ADMIN: POST /api/content/admin/create ────────────
@@ -371,23 +374,21 @@ exports.uploadVideo = asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'Video file required');
   try {
     const content = await loadManageableContent(req.user, req.params.id);
-    const id = String(content._id);
 
-    const outputDir = require('path').join(hlsRoot(), hlsDirName('content', id));
-    fs.mkdirSync(outputDir, { recursive: true });
-
-    await Content.findByIdAndUpdate(id, { transcodeStatus: 'processing' });
-
-    const job = await transcodingQueue.add({
-      inputPath: req.file.path,
-      outputDir,
-      contentId: id,
+    const { jobId, probe } = await queueTranscode({
       model: 'content',
-      type: content.type,
-      ownerId: String(req.user._id),
+      id: content._id,
+      file: req.file,
+      ownerId: req.user._id,
     });
 
-    res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding started' }));
+    res.json(
+      new ApiResponse(200, {
+        jobId,
+        duration: Math.round(probe.duration),
+        message: 'Transcoding started',
+      })
+    );
   } catch (err) {
     removeFile(req.file.path); // do not leave the upload behind when it was refused
     throw err;
@@ -436,6 +437,8 @@ exports.getTranscodeStatus = asyncHandler(async (req, res) => {
     new ApiResponse(200, {
       status: content.transcodeStatus,
       ready: content.transcodeStatus === 'done',
+      error: content.transcodeStatus === 'failed' ? content.transcodeError || null : null,
+      duration: content.duration || null,
       videoFiles: content.transcodeStatus === 'done' ? content.videoFiles : null,
     })
   );

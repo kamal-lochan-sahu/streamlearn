@@ -1,6 +1,6 @@
 # StreamLearn: Project State
 
-Last updated: 2026-10-30
+Last updated: 2026-11-13
 
 ## Goal
 
@@ -15,11 +15,14 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
   - [x] 1b: auth hardening (P0 #6, #10, Google login, trust proxy)
   - [x] 1c: access control (P0 #3, #9: streams, uploads, IDOR, sockets)
   - [x] 1d: mass assignment and query injection (P0 #4, #11)
-- [ ] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
+- [x] Phase 2: core flows (player, course learn, admin CRUD, auth flows)
   - [x] 2a: playback and viewer flows (movie play, course learn, resume, continue watching, watchlist)
   - [x] 2b: admin CRUD (content list with drafts, Users page + ban/role, review moderation, CSV export)
   - [x] 2c: auth screens (forgot/reset password, OTP verify, change password, profile picker)
 - [ ] Phase 3: video pipeline (object storage, signed access, ffprobe)
+  - [ ] 3a: ffprobe check, safer ffmpeg transcoder (quality ladder, no upscaling), job status and errors, duration, safe re-upload
+  - [ ] 3b: object storage for HLS files, delete cascade for titles, episodes, lectures and their files
+  - [ ] 3c: signed access on object storage, cleanup jobs (orphan files, stuck jobs)
 - [ ] Phase 4: automated tests (auth, payments, access control)
 - [ ] Phase 5: deployment and monitoring
 - [ ] Phase 6: competitor-driven features
@@ -72,6 +75,10 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - React Query v5: always `invalidateQueries({ queryKey: [...] })` (the array form silently invalidated everything).
 - Admin (2b): `GET /content/admin/list` (drafts included; creators see only their own titles) feeds the admin Content page. `GET /users/admin/all` lists every role with search, role and status filters. Ban/unban (`PUT /users/admin/:id/status`, admin) removes the refresh token; the access token stops working at once because `authenticate` checks `isActive` on every request. Roles (`PUT /users/admin/:id/role`) are changed by the owner only, to viewer, creator or admin. Nobody changes themselves or the owner; only the owner changes admins. Review moderation: `GET /reviews/admin/all`, `PUT /reviews/admin/:id/visibility`; a review hidden by staff has `moderated: true` and its author cannot bring it back. Export: `GET /analytics/export?type=transactions|subscriptions|users|content&days=` streams a CSV (max 50,000 rows, text starting with = + - @ gets an apostrophe so spreadsheets do not run it as a formula).
 - Auth screens (2c): `/forgot-password`, `/reset-password/:token` (signs the user in afterwards), `/login/otp` (6 digit email code, resend after 60s) and a Change password card on the Account page (the server signs out other devices and this device gets the new session). All sign-in paths go through `authStore.applySession`. The app calls `refreshUser()` (GET /users/profile) when it opens, so role, subscription and profiles are never stale. `switchProfile` asks the server first and then updates the store; `activeProfileIndex` is persisted. Profiles are addressed by position: deleting profile i moves the later ones up, so the active profile index and the per-profile watchlists are shifted with it (the deleted profile's watchlist is deleted). `POST /users/profiles` and `DELETE /users/profiles/:i` answer `{ profiles, activeProfile }`.
+- Video pipeline (3a): `services/video.service.js#queueTranscode` is the only way an upload becomes a job (content, episode, lecture, `/upload/video`). It ffprobes the file first (`utils/ffmpeg.utils.js`): not a video, no video track, broken, or longer than `MAX_VIDEO_HOURS` (default 12) answers 400 with a readable message before anything is queued; the temp file is removed by the caller. A second upload while a job for the same item is really queued or running answers 409; a stale "processing" whose job no longer exists does not block. ffmpeg and ffprobe are started with `spawn` and an argument list (no shell, no `fluent-ffmpeg`), with a time limit (`TRANSCODE_TIMEOUT_MINUTES`, default 360).
+- Quality ladder: 480p, 720p and 1080p rungs are made only when the source is that tall (never upscaled); a source smaller than 480p gets one rung at its own size under the key `480p`. Rungs are named folders (`480p/`, `720p/`, `1080p/`), audio is optional (silent videos stay silent), phone rotation is respected, keyframes every 2 seconds. `videoFiles` lists only rungs that exist; `/stream?quality=` falls back to master when a quality is missing.
+- Transcode results: the worker encodes into `<dir>.new-<jobId>` and swaps it in only when everything worked, so a failed re-upload never damages the video that already plays. The first finished video publishes the item (`isActive: true`); a re-upload never changes visibility. `duration` (seconds) is saved from ffprobe and also returned by the upload response. `transcodeStatus` stays `processing` while retries remain; only the last attempt writes `failed` plus a short `transcodeError` (no server paths). A title deleted while its video is processed leaves no files behind.
+- `transcodeJobId` and `transcodeError` are server-only: they are in `SERVER_MANAGED`, and `utils/schema.utils.js` strips them from `toJSON()` and `toObject()` of Content, Episode and Lecture. Do not use `select: false` for such fields: FerretDB (sandbox tests) cannot run `findOneAndUpdate` with that projection. The admin content list adds `transcodeError` on purpose; the admin Content page shows it as a tooltip on a red "failed" badge and checks again every 5 seconds while something is processing.
 
 ## Working agreement
 
@@ -95,3 +102,4 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - 2026-10-30, Phase 2a: playback and viewer flows. Movie play (id vs slug) and course learn fixed by accepting both on the API and linking by slug; resume position for movies, episodes and lectures; next-episode autoplay; continue-watching saved with the right ids (episodes used to be saved as a title and vanished) and listed with one query; progress saving that really runs while playing (the old 5s timer was reset on every time update); player retries short HLS errors and seeks reliably; drafts previewable by their owner; watchlist `get` no longer returns empty objects; Play on cards/hero opens the detail page for series and courses. Known gaps left for later: the "My Notes" box on the player page is not saved anywhere (needs a model, Phase 6); view count increments on every uncached detail load instead of on play.
 - 2026-10-30, Phase 2b: admin CRUD (see Decisions). Known gap: deleting a title (`DELETE /content/admin/:id`) removes only the Content document, not its episodes, sections, lectures, reviews or video files (needs a cascade, Phase 3 with object storage).
 - 2026-11-11, Phase 2c: auth screens (see Decisions). Phase 2 is complete once 2c is merged. Known gaps for later: `npm run lint` in the frontend has no ESLint config file (Phase 4 tooling); no email verification step after register (accounts are usable at once; email codes only work as a login method); profile avatars per profile are not editable yet.
+- 2026-11-13, Phase 3a: video pipeline basics (see Decisions). Removed `fluent-ffmpeg` and `config/ffmpeg.js`; new env vars `FFPROBE_PATH`, `FFMPEG_PRESET`, `MAX_VIDEO_HOURS`, `TRANSCODE_TIMEOUT_MINUTES` (all optional). Known gaps for 3b/3c: files still live on the server disk (`HLS_OUTPUT_PATH`), deleting a title, episode or lecture does not remove its files or child documents yet, no cleanup of orphan folders or stuck jobs, one transcode at a time per worker process (concurrency 1).

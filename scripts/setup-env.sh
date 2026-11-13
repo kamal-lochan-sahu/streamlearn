@@ -31,6 +31,7 @@ TEMP_UPLOAD_PATH=./uploads/temp
 HLS_OUTPUT_PATH=./uploads/hls
 STREAM_BASE_URL=http://localhost:${BE_PORT}
 FFMPEG_PATH=$(command -v ffmpeg || echo /usr/bin/ffmpeg)
+FFPROBE_PATH=$(command -v ffprobe || echo /usr/bin/ffprobe)
 
 OTT_MODE=true
 EDUCATION_MODE=true

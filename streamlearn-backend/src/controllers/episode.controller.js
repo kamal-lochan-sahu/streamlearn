@@ -1,9 +1,7 @@
-const fs = require('fs');
-const path = require('path');
 const Episode = require('../models/Episode');
 const Content = require('../models/Content');
 const { buildStreamUrl } = require('../utils/hls.utils');
-const { transcodingQueue } = require('../queue/jobQueue');
+const { queueTranscode } = require('../services/video.service');
 const {
   checkContentAccess,
   assertAllowed,
@@ -12,7 +10,7 @@ const {
   CONTENT_ACCESS_FIELDS,
 } = require('../services/access.service');
 const { episodeResumeAt } = require('../services/resume.service');
-const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
+const { hlsDirName } = require('../utils/paths.utils');
 const { videoUpload, removeFile } = require('../utils/upload.utils');
 const { requireObjectId, omitKeys } = require('../utils/validate.utils');
 const { ApiError } = require('../utils/ApiError');
@@ -29,6 +27,8 @@ const SERVER_MANAGED = [
   'contentId',
   'videoFiles',
   'transcodeStatus',
+  'transcodeJobId',
+  'transcodeError',
 ];
 
 exports.getByContent = asyncHandler(async (req, res) => {
@@ -119,17 +119,13 @@ exports.uploadVideo = asyncHandler(async (req, res) => {
     if (!episode) throw new ApiError(404, 'Episode not found');
     await loadManageableContent(req.user, episode.contentId);
 
-    const outputDir = path.join(hlsRoot(), hlsDirName('episode', episode._id));
-    fs.mkdirSync(outputDir, { recursive: true });
-    await Episode.findByIdAndUpdate(episode._id, { transcodeStatus: 'processing' });
-    const job = await transcodingQueue.add({
-      inputPath: req.file.path,
-      outputDir,
-      contentId: String(episode._id),
+    const { jobId, probe } = await queueTranscode({
       model: 'episode',
-      ownerId: String(req.user._id),
+      id: episode._id,
+      file: req.file,
+      ownerId: req.user._id,
     });
-    res.json(new ApiResponse(200, { jobId: job.id }));
+    res.json(new ApiResponse(200, { jobId, duration: Math.round(probe.duration) }));
   } catch (err) {
     removeFile(req.file.path);
     throw err;

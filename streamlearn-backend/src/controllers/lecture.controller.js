@@ -1,10 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const Lecture = require('../models/Lecture');
 const Section = require('../models/Section');
 const Content = require('../models/Content');
 const { buildStreamUrl } = require('../utils/hls.utils');
-const { transcodingQueue } = require('../queue/jobQueue');
+const { queueTranscode } = require('../services/video.service');
 const cloudinary = require('../config/cloudinary');
 const {
   checkLectureAccess,
@@ -14,7 +12,7 @@ const {
   CONTENT_ACCESS_FIELDS,
 } = require('../services/access.service');
 const { lectureResumeAt } = require('../services/resume.service');
-const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
+const { hlsDirName } = require('../utils/paths.utils');
 const { lectureUpload, removeFile } = require('../utils/upload.utils');
 const { requireObjectId, requireHttpUrl, omitKeys } = require('../utils/validate.utils');
 const { ApiError } = require('../utils/ApiError');
@@ -31,6 +29,8 @@ const SERVER_MANAGED = [
   'contentId',
   'videoFiles',
   'transcodeStatus',
+  'transcodeJobId',
+  'transcodeError',
 ];
 
 // Fields students must never see in listings: raw video files, notes (paid material), transcript.
@@ -129,18 +129,20 @@ exports.uploadVideo = asyncHandler(async (req, res) => {
 
     const { id } = req.params;
     if (req.files?.video?.[0]) {
-      const outputDir = path.join(hlsRoot(), hlsDirName('lecture', id));
-      fs.mkdirSync(outputDir, { recursive: true });
-      await Lecture.findByIdAndUpdate(id, { transcodeStatus: 'processing' });
-      const job = await transcodingQueue.add({
-        inputPath: req.files.video[0].path,
-        outputDir,
-        contentId: id,
+      const { jobId, probe } = await queueTranscode({
         model: 'lecture',
-        ownerId: String(req.user._id),
+        id,
+        file: req.files.video[0],
+        ownerId: req.user._id,
       });
       files.shift(); // the transcoder owns (and later deletes) this file now
-      return res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding queued' }));
+      return res.json(
+        new ApiResponse(200, {
+          jobId,
+          duration: Math.round(probe.duration),
+          message: 'Transcoding queued',
+        })
+      );
     }
     if (req.files?.notes?.[0]) {
       const result = await cloudinary.uploader.upload(req.files.notes[0].path, {

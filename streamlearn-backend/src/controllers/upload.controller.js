@@ -1,11 +1,9 @@
-const fs = require('fs');
-const path = require('path');
 const cloudinary = require('../config/cloudinary');
 const { transcodingQueue } = require('../queue/jobQueue');
+const { queueTranscode } = require('../services/video.service');
 const Episode = require('../models/Episode');
 const Lecture = require('../models/Lecture');
 const { loadManageableContent, isStaff } = require('../services/access.service');
-const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
 const { videoUpload, imageUpload, pdfUpload, removeFile } = require('../utils/upload.utils');
 const { requireObjectId } = require('../utils/validate.utils');
 const { ApiError } = require('../utils/ApiError');
@@ -40,18 +38,19 @@ exports.uploadVideo = asyncHandler(async (req, res) => {
     }
     await loadManageableContent(req.user, rootContentId);
 
-    const outputDir = path.join(hlsRoot(), hlsDirName(model, contentId));
-    fs.mkdirSync(outputDir, { recursive: true });
-
-    await Model.findByIdAndUpdate(contentId, { transcodeStatus: 'processing' });
-    const job = await transcodingQueue.add({
-      inputPath: req.file.path,
-      outputDir,
-      contentId,
+    const { jobId, probe } = await queueTranscode({
       model,
-      ownerId: String(req.user._id),
+      id: contentId,
+      file: req.file,
+      ownerId: req.user._id,
     });
-    res.json(new ApiResponse(200, { jobId: job.id, message: 'Transcoding queued' }));
+    res.json(
+      new ApiResponse(200, {
+        jobId,
+        duration: Math.round(probe.duration),
+        message: 'Transcoding queued',
+      })
+    );
   } catch (err) {
     removeFile(req.file.path);
     throw err;

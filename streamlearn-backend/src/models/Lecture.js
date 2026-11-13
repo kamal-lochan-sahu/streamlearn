@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { hideTranscodeInternals } = require('../utils/schema.utils');
 
 const lectureSchema = new mongoose.Schema(
   {
@@ -20,8 +21,15 @@ const lectureSchema = new mongoose.Schema(
       enum: ['pending', 'processing', 'done', 'failed'],
       default: 'pending',
     },
+    // Server-only: which queue job is working on the video, and why the last one failed.
+    // Never part of a JSON response (see toJSON below); admin screens read transcodeError explicitly.
+    transcodeJobId: String,
+    transcodeError: String,
   },
   { timestamps: true }
 );
+
+// Internal transcode details (job id, failure reason) never leave the server in a JSON response.
+hideTranscodeInternals(lectureSchema);
 
 module.exports = mongoose.model('Lecture', lectureSchema);

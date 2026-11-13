@@ -33,6 +33,9 @@ export default function AdminContents() {
         .get('/content/admin/list', { params: { page, limit: 20, q: search || undefined, status } })
         .then((r) => r.data.data),
     placeholderData: keepPreviousData,
+    // while a video is being processed, check again every 5 seconds
+    refetchInterval: (query) =>
+      query.state.data?.items?.some((i) => i.transcodeStatus === 'processing') ? 5000 : false,
   });
 
   const createContent = useMutation({
@@ -66,8 +69,9 @@ export default function AdminContents() {
           setUploading((u) => ({ ...u, [contentId]: Math.round((e.loaded * 100) / e.total) })),
       });
       toast.success('Upload complete! Transcoding started.');
+      qc.invalidateQueries({ queryKey: ['admin-content'] });
     } catch {
-      toast.error('Upload failed');
+      // the error toast (for example "not a readable video") is shown by the api interceptor
     } finally {
       setUploading((u) => {
         const n = { ...u };
@@ -183,12 +187,17 @@ export default function AdminContents() {
                           </div>
                         ) : (
                           <Badge
+                            title={
+                              item.transcodeStatus === 'failed' ? item.transcodeError : undefined
+                            }
                             variant={
                               item.transcodeStatus === 'done'
                                 ? 'green'
                                 : item.transcodeStatus === 'processing'
                                   ? 'yellow'
-                                  : 'default'
+                                  : item.transcodeStatus === 'failed'
+                                    ? 'red'
+                                    : 'default'
                             }
                           >
                             {item.transcodeStatus || 'none'}
