@@ -2,6 +2,7 @@ const Episode = require('../models/Episode');
 const Content = require('../models/Content');
 const { buildStreamUrl } = require('../utils/hls.utils');
 const { queueTranscode } = require('../services/video.service');
+const { deleteEpisodeCascade } = require('../services/cascade.service');
 const {
   checkContentAccess,
   assertAllowed,
@@ -107,7 +108,9 @@ exports.update = asyncHandler(async (req, res) => {
 
 exports.remove = asyncHandler(async (req, res) => {
   requireObjectId(req.params.id, 'episode id');
-  await Episode.findByIdAndDelete(req.params.id);
+  const episode = await Episode.findById(req.params.id);
+  if (!episode) throw new ApiError(404, 'Episode not found');
+  await deleteEpisodeCascade(episode);
   res.json(new ApiResponse(200, {}, 'Deleted'));
 });
 

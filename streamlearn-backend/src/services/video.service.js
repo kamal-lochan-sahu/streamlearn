@@ -4,6 +4,7 @@ const Episode = require('../models/Episode');
 const Lecture = require('../models/Lecture');
 const { transcodingQueue } = require('../queue/jobQueue');
 const { probeFile } = require('../utils/ffmpeg.utils');
+const { cleanupTemp } = require('./transcoding.service');
 const { hlsRoot, hlsDirName } = require('../utils/paths.utils');
 const { ApiError } = require('../utils/ApiError');
 
@@ -68,4 +69,23 @@ const queueTranscode = async ({ model, id, file, ownerId }) => {
   return { jobId: job.id, probe };
 };
 
-module.exports = { queueTranscode, isJobRunning, MODELS };
+/**
+ * Drops transcode jobs that are still waiting for the given movie/episode/lecture ids (they were
+ * deleted) and removes their upload files. A job that is already running notices the missing
+ * document when it finishes and cleans up after itself (see queue/transcodingWorker.js).
+ */
+const cancelTranscodes = async (ids) => {
+  const wanted = new Set(ids.map(String));
+  if (!wanted.size) return 0;
+  const jobs = await transcodingQueue.getJobs(['waiting', 'delayed', 'paused']);
+  let cancelled = 0;
+  for (const job of jobs) {
+    if (!job || !wanted.has(String(job.data?.contentId))) continue;
+    cleanupTemp(job.data.inputPath);
+    await job.remove().catch(() => {});
+    cancelled++;
+  }
+  return cancelled;
+};
+
+module.exports = { queueTranscode, isJobRunning, cancelTranscodes, MODELS };

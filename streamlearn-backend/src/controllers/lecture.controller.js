@@ -3,6 +3,7 @@ const Section = require('../models/Section');
 const Content = require('../models/Content');
 const { buildStreamUrl } = require('../utils/hls.utils');
 const { queueTranscode } = require('../services/video.service');
+const { deleteLectureCascade } = require('../services/cascade.service');
 const cloudinary = require('../config/cloudinary');
 const {
   checkLectureAccess,
@@ -113,9 +114,9 @@ exports.update = asyncHandler(async (req, res) => {
 
 exports.remove = asyncHandler(async (req, res) => {
   requireObjectId(req.params.id, 'lecture id');
-  const lecture = await Lecture.findByIdAndDelete(req.params.id);
-  if (lecture?.sectionId)
-    await Section.findByIdAndUpdate(lecture.sectionId, { $pull: { lectures: lecture._id } });
+  const lecture = await Lecture.findById(req.params.id);
+  if (!lecture) throw new ApiError(404, 'Lecture not found');
+  await deleteLectureCascade(lecture);
   res.json(new ApiResponse(200, {}, 'Deleted'));
 });
 

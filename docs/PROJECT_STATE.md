@@ -1,6 +1,6 @@
 # StreamLearn: Project State
 
-Last updated: 2026-11-13
+Last updated: 2026-11-14
 
 ## Goal
 
@@ -21,7 +21,8 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
   - [x] 2c: auth screens (forgot/reset password, OTP verify, change password, profile picker)
 - [ ] Phase 3: video pipeline (object storage, signed access, ffprobe)
   - [ ] 3a: ffprobe check, safer ffmpeg transcoder (quality ladder, no upscaling), job status and errors, duration, safe re-upload
-  - [ ] 3b: object storage for HLS files, delete cascade for titles, episodes, lectures and their files
+  - [x] 3b-1: delete cascade for titles, episodes, lectures and their files, storage interface (local disk driver)
+  - [ ] 3b-2: S3-compatible object storage driver (Cloudflare R2 / Backblaze B2), only when launching (paid); until then local disk is used
   - [ ] 3c: signed access on object storage, cleanup jobs (orphan files, stuck jobs)
 - [ ] Phase 4: automated tests (auth, payments, access control)
 - [ ] Phase 5: deployment and monitoring
@@ -79,6 +80,8 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - Quality ladder: 480p, 720p and 1080p rungs are made only when the source is that tall (never upscaled); a source smaller than 480p gets one rung at its own size under the key `480p`. Rungs are named folders (`480p/`, `720p/`, `1080p/`), audio is optional (silent videos stay silent), phone rotation is respected, keyframes every 2 seconds. `videoFiles` lists only rungs that exist; `/stream?quality=` falls back to master when a quality is missing.
 - Transcode results: the worker encodes into `<dir>.new-<jobId>` and swaps it in only when everything worked, so a failed re-upload never damages the video that already plays. The first finished video publishes the item (`isActive: true`); a re-upload never changes visibility. `duration` (seconds) is saved from ffprobe and also returned by the upload response. `transcodeStatus` stays `processing` while retries remain; only the last attempt writes `failed` plus a short `transcodeError` (no server paths). A title deleted while its video is processed leaves no files behind.
 - `transcodeJobId` and `transcodeError` are server-only: they are in `SERVER_MANAGED`, and `utils/schema.utils.js` strips them from `toJSON()` and `toObject()` of Content, Episode and Lecture. Do not use `select: false` for such fields: FerretDB (sandbox tests) cannot run `findOneAndUpdate` with that projection. The admin content list adds `transcodeError` on purpose; the admin Content page shows it as a tooltip on a red "failed" badge and checks again every 5 seconds while something is processing.
+- Delete cascade (3b-1): `services/cascade.service.js` is the only way to delete a title, episode or lecture (admin delete endpoints call it). Database first, then files best effort: episodes, sections, lectures, reviews, assignments, doubts, course progress, watch parties, notifications are deleted; watchlists, continue watching, watch history and coupons lose the reference; live classes lose `batchId`; waiting transcode jobs are cancelled with their upload files. After a lecture delete every learner's course percentage is recomputed. Payment records (`Transaction`) are kept on purpose. Thumbnails/notes uploaded to Cloudinary are not removed yet.
+- Storage (3b-1): `services/storage.service.js` is the single place that removes stored video files (`removeVideo(model, id)`); today it only knows the server disk (free). The S3 driver (3b-2) will replace the functions in that file. Decision (user, 2026-11-14): everything stays free until launch; paid services only at launch.
 
 ## Working agreement
 
@@ -103,3 +106,4 @@ Workflow: all changes done locally, reviewed, then pushed to GitHub. Not deploye
 - 2026-10-30, Phase 2b: admin CRUD (see Decisions). Known gap: deleting a title (`DELETE /content/admin/:id`) removes only the Content document, not its episodes, sections, lectures, reviews or video files (needs a cascade, Phase 3 with object storage).
 - 2026-11-11, Phase 2c: auth screens (see Decisions). Phase 2 is complete once 2c is merged. Known gaps for later: `npm run lint` in the frontend has no ESLint config file (Phase 4 tooling); no email verification step after register (accounts are usable at once; email codes only work as a login method); profile avatars per profile are not editable yet.
 - 2026-11-13, Phase 3a: video pipeline basics (see Decisions). Removed `fluent-ffmpeg` and `config/ffmpeg.js`; new env vars `FFPROBE_PATH`, `FFMPEG_PRESET`, `MAX_VIDEO_HOURS`, `TRANSCODE_TIMEOUT_MINUTES` (all optional). Known gaps for 3b/3c: files still live on the server disk (`HLS_OUTPUT_PATH`), deleting a title, episode or lecture does not remove its files or child documents yet, no cleanup of orphan folders or stuck jobs, one transcode at a time per worker process (concurrency 1).
+- 2026-11-14, Phase 3b-1: delete cascade and storage interface (see Decisions). Gaps: Cloudinary thumbnails/notes are not deleted with their title, S3 driver (3b-2) waits for launch, Phase 3c (signed access on object storage, cleanup of orphan folders and stuck jobs) is next.

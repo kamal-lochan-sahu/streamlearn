@@ -8,6 +8,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { buildStreamUrl, QUALITIES } = require('../utils/hls.utils');
 const { get: cGet, set: cSet, del: cDel } = require('../services/cache.service');
 const { queueTranscode } = require('../services/video.service');
+const { deleteContentCascade } = require('../services/cascade.service');
 const cloudinary = require('../config/cloudinary');
 const slugify = require('slugify');
 const {
@@ -363,10 +364,13 @@ exports.update = asyncHandler(async (req, res) => {
 
 // ── ADMIN: DELETE /api/content/admin/:id ─────────────
 exports.remove = asyncHandler(async (req, res) => {
-  const content = await Content.findByIdAndDelete(req.params.id);
+  requireObjectId(req.params.id, 'content id');
+  const content = await Content.findById(req.params.id);
   if (!content) throw new ApiError(404, 'Content not found');
+  // episodes, lectures, reviews, progress, watchlists, video files... all go with the title
+  const removed = await deleteContentCascade(content);
   await cDel(detailKey(content.slug));
-  res.json(new ApiResponse(200, {}, 'Deleted'));
+  res.json(new ApiResponse(200, removed, 'Deleted'));
 });
 
 // ── ADMIN: POST /api/content/admin/:id/upload ─────────
