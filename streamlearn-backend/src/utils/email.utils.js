@@ -1,8 +1,26 @@
-const transporter = require('../config/email');
+const { emailDriver, getTransporter } = require('../config/email');
+
+// Readable text from our HTML mails: links keep their address, tags are dropped.
+const htmlToText = (html = '') =>
+  String(html)
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '$2: $1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 
 const sendEmail = async ({ to, subject, html, text }) => {
+  if (emailDriver() === 'console') {
+    // No mail is sent: the content is printed so it can be read from the server log.
+    console.log(
+      `\n📧 [email:console] to: ${to}\n   subject: ${subject}\n   ${text || htmlToText(html)}\n`
+    );
+    return { console: true };
+  }
   try {
-    const info = await transporter.sendMail({
+    const info = await getTransporter().sendMail({
       from: process.env.EMAIL_FROM || 'StreamLearn <noreply@streamlearn.com>',
       to,
       subject,
@@ -72,6 +90,7 @@ const sendPaymentConfirmEmail = (user, amount) =>
   });
 
 module.exports = {
+  htmlToText,
   sendEmail,
   sendWelcomeEmail,
   sendOTPEmail,

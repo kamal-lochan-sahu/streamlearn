@@ -23,8 +23,11 @@ const evenDown = (n) => Math.max(2, Math.floor(n / 2) * 2);
  * Which rungs to make for a source of this height (after rotation).
  * Always at least one: a source smaller than 480p gets a single rung at its own size.
  */
-const pickRungs = (sourceHeight) => {
-  const fitting = LADDER.filter((r) => r.height <= sourceHeight + 8); // 8px: 1088-high "1080p" files
+const pickRungs = (sourceHeight, maxHeight = 0) => {
+  // maxHeight (TRANSCODE_MAX_HEIGHT) caps the biggest rung, for weak hosts; 0 means no cap
+  const fitting = LADDER.filter(
+    (r) => r.height <= sourceHeight + 8 && (!maxHeight || r.height <= maxHeight) // 8px: 1088-high "1080p" files
+  );
   const chosen = fitting.length ? fitting : [LADDER[0]];
   return chosen.map((r) => ({ ...r, height: Math.min(r.height, evenDown(sourceHeight)) }));
 };
@@ -37,7 +40,7 @@ const pickRungs = (sourceHeight) => {
  * @returns {Promise<{rungs: string[], masterPath: string}>}
  */
 const transcodeToHLS = async (inputPath, outputDir, { probe, onProgress = () => {} }) => {
-  const rungs = pickRungs(probe.height);
+  const rungs = pickRungs(probe.height, Number(process.env.TRANSCODE_MAX_HEIGHT) || 0);
 
   fs.rmSync(outputDir, { recursive: true, force: true });
   fs.mkdirSync(outputDir, { recursive: true });

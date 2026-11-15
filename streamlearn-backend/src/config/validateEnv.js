@@ -26,6 +26,14 @@ const validateEnv = () => {
     );
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    const wanted = String(process.env.EMAIL_DRIVER || '').toLowerCase();
+    if (wanted === 'console' || (wanted !== 'smtp' && !process.env.SMTP_HOST))
+      console.warn(
+        '⚠️  Email mode is "console": OTP codes and reset links are printed in the server log, nobody gets an email. Fine for a trial; set SMTP_* (or an email API) before real users.'
+      );
+  }
+
   if (!problems.length) return;
   const text = `Environment problems:\n - ${problems.join('\n - ')}`;
   if (process.env.NODE_ENV === 'production') throw new Error(text);
