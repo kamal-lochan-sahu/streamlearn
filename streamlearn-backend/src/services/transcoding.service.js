@@ -113,16 +113,16 @@ const transcodeToHLS = async (inputPath, outputDir, { probe, onProgress = () => 
 };
 
 /**
- * What goes into `videoFiles`: paths relative to the HLS root (for example "ep-<id>/720p/index.m3u8").
- * These are NOT public URLs: playback links are created per request by utils/hls.utils.js
- * and only after an access check. Only rungs that really exist are listed.
+ * What goes into `videoFiles`: storage paths (for example "ep-<id>/720p/index.m3u8", or
+ * "ep-<id>/v12/720p/index.m3u8" in a bucket). `localDir` is the folder that holds the finished files,
+ * `prefix` is where they will be stored. These are NOT public URLs: playback links are created per
+ * request by utils/hls.utils.js and only after an access check. Only rungs that really exist are listed.
  */
-const collectVideoFiles = (outputDir) => {
-  const dir = path.basename(outputDir);
-  const files = { master: `${dir}/master.m3u8` };
+const collectVideoFiles = (localDir, prefix) => {
+  const files = { master: `${prefix}/master.m3u8` };
   LADDER.forEach((r) => {
-    if (fs.existsSync(path.join(outputDir, r.name, 'index.m3u8')))
-      files[r.name] = `${dir}/${r.name}/index.m3u8`;
+    if (fs.existsSync(path.join(localDir, r.name, 'index.m3u8')))
+      files[r.name] = `${prefix}/${r.name}/index.m3u8`;
   });
   return files;
 };

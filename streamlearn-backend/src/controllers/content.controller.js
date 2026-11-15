@@ -47,6 +47,7 @@ const SERVER_MANAGED = [
   'videoFiles',
   'transcodeStatus',
   'transcodeJobId',
+  'videoVersion',
   'transcodeError',
   'viewCount',
   'rating',
@@ -222,14 +223,14 @@ exports.getResume = asyncHandler(async (req, res) => {
 exports.getStreamUrl = asyncHandler(async (req, res) => {
   const { quality = 'master' } = req.query;
   const content = await Content.findOne(slugOrIdFilter(req.params.slug)).select(
-    `videoFiles type thumbnail ${CONTENT_ACCESS_FIELDS}`
+    `videoFiles videoVersion type thumbnail ${CONTENT_ACCESS_FIELDS}`
   );
   if (!content) throw new ApiError(404, 'Content not found');
   assertAllowed(await checkContentAccess(req.user, content));
 
   if (!content.videoFiles?.master) throw new ApiError(404, 'Video not ready yet');
   const wanted = QUALITIES.includes(quality) && content.videoFiles[quality] ? quality : 'master';
-  const url = buildStreamUrl(req, hlsDirName('content', content._id), wanted);
+  const url = buildStreamUrl(req, hlsDirName('content', content._id), wanted, content.videoVersion);
   res.json(
     new ApiResponse(200, {
       url,

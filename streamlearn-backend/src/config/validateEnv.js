@@ -18,6 +18,14 @@ const validateEnv = () => {
   if (JWT_SECRET && JWT_SECRET === REFRESH_TOKEN_SECRET)
     problems.push('JWT_SECRET and REFRESH_TOKEN_SECRET must be different');
 
+  if (String(process.env.STORAGE_DRIVER || 'local').toLowerCase() === 's3') {
+    ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'].forEach(need);
+  } else if (process.env.NODE_ENV === 'production') {
+    console.warn(
+      '⚠️  STORAGE_DRIVER is "local": videos are kept on this server\'s disk and are lost when the host resets it. Use STORAGE_DRIVER=s3 on hosts with a temporary disk (Render free).'
+    );
+  }
+
   if (!problems.length) return;
   const text = `Environment problems:\n - ${problems.join('\n - ')}`;
   if (process.env.NODE_ENV === 'production') throw new Error(text);

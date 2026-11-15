@@ -31,6 +31,7 @@ const SERVER_MANAGED = [
   'videoFiles',
   'transcodeStatus',
   'transcodeJobId',
+  'videoVersion',
   'transcodeError',
 ];
 
@@ -53,7 +54,7 @@ exports.getByContent = asyncHandler(async (req, res) => {
 exports.getStreamUrl = asyncHandler(async (req, res) => {
   requireObjectId(req.params.id, 'lecture id');
   const lecture = await Lecture.findById(req.params.id).select(
-    'videoFiles isFreePreview isActive contentId notes'
+    'videoFiles videoVersion isFreePreview isActive contentId notes'
   );
   if (!lecture) throw new ApiError(404, 'Lecture not found');
   const content = await Content.findById(lecture.contentId).select(CONTENT_ACCESS_FIELDS);
@@ -66,7 +67,12 @@ exports.getStreamUrl = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Lecture not available');
 
   if (!lecture.videoFiles?.master) throw new ApiError(404, 'Video not ready');
-  const url = buildStreamUrl(req, hlsDirName('lecture', lecture._id));
+  const url = buildStreamUrl(
+    req,
+    hlsDirName('lecture', lecture._id),
+    'master',
+    lecture.videoVersion
+  );
   res.json(
     new ApiResponse(200, {
       url,

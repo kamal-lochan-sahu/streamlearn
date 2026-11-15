@@ -8,6 +8,7 @@ const hideTranscodeInternals = (schema) => {
   const transform = (doc, ret) => {
     delete ret.transcodeJobId;
     delete ret.transcodeError;
+    delete ret.videoVersion;
     return ret;
   };
   schema.set('toJSON', { transform });

@@ -74,6 +74,7 @@ const contentSchema = new mongoose.Schema(
     // Server-only: which queue job is working on the video, and why the last one failed.
     // Never part of a JSON response (see toJSON below); admin screens read transcodeError explicitly.
     transcodeJobId: String,
+    videoVersion: String, // which stored copy of the video plays (object storage only)
     transcodeError: String,
 
     // SEO

@@ -1,13 +1,8 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 const fs = require('fs');
 const { transcodingQueue } = require('./jobQueue');
-const {
-  transcodeToHLS,
-  collectVideoFiles,
-  publishDir,
-  removeDir,
-  cleanupTemp,
-} = require('../services/transcoding.service');
+const { transcodeToHLS, removeDir, cleanupTemp } = require('../services/transcoding.service');
+const storage = require('../services/storage.service');
 const { MODELS } = require('../services/video.service');
 const { probeFile } = require('../utils/ffmpeg.utils');
 const { connectDB } = require('../config/db');
@@ -55,16 +50,33 @@ transcodingQueue.process(async (job) => {
     }
     const firstVideo = !doc.videoFiles?.master;
 
-    publishDir(workDir, outputDir);
+    // Puts the finished files in their final place (disk, or a new version in the bucket) and removes
+    // workDir. The old video is not touched yet: the item still points at it.
+    const { videoFiles, version } = await storage.publishVideo({
+      model,
+      id: contentId,
+      workDir,
+      version: job.id,
+    });
     const update = {
-      videoFiles: collectVideoFiles(outputDir),
+      videoFiles,
       duration: Math.round(probe.duration),
       transcodeStatus: 'done',
     };
     // The first finished video publishes the item (as before). A re-upload never changes visibility,
     // so an unpublished title stays unpublished.
     if (firstVideo) update.isActive = true;
-    await Model.updateOne({ _id: contentId }, { $set: update, $unset: { transcodeError: 1 } });
+    const unset = { transcodeError: 1 };
+    if (version) update.videoVersion = version;
+    else unset.videoVersion = 1;
+    const written = await Model.updateOne({ _id: contentId }, { $set: update, $unset: unset });
+    if (!written.matchedCount) {
+      // deleted in the short time between the check above and now: nothing may stay behind
+      await storage.removeVideo(model, contentId);
+      cleanupTemp(inputPath);
+      return { success: false, reason: 'deleted' };
+    }
+    await storage.pruneOldVersions(model, contentId, version); // the item points to the new copy now
 
     cleanupTemp(inputPath);
     console.log(`✅ Transcoding done: ${contentId}`);

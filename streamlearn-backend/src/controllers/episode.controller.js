@@ -29,6 +29,7 @@ const SERVER_MANAGED = [
   'videoFiles',
   'transcodeStatus',
   'transcodeJobId',
+  'videoVersion',
   'transcodeError',
 ];
 
@@ -45,7 +46,7 @@ exports.getByContent = asyncHandler(async (req, res) => {
 exports.getStreamUrl = asyncHandler(async (req, res) => {
   requireObjectId(req.params.id, 'episode id');
   const episode = await Episode.findById(req.params.id).select(
-    'videoFiles isActive contentId thumbnail seasonNumber episodeNumber'
+    'videoFiles videoVersion isActive contentId thumbnail seasonNumber episodeNumber'
   );
   if (!episode) throw new ApiError(404, 'Episode not found');
 
@@ -57,7 +58,12 @@ exports.getStreamUrl = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Episode not available');
 
   if (!episode.videoFiles?.master) throw new ApiError(404, 'Stream not ready');
-  const url = buildStreamUrl(req, hlsDirName('episode', episode._id));
+  const url = buildStreamUrl(
+    req,
+    hlsDirName('episode', episode._id),
+    'master',
+    episode.videoVersion
+  );
 
   // The next episode of the same series (same season first, then the following seasons)
   const next = await Episode.findOne({
